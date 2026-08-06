@@ -3,7 +3,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class ModelResponse:
-    text: str
+    content: str
     latency: float
     prompt_tokens: int
     completion_tokens: int

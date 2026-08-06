@@ -1,0 +1,5 @@
+{
+    "category": "headings",
+    "difficulty": 1,
+    "description": "Extract all headings from a markdown document."
+}

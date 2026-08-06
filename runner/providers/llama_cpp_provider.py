@@ -31,7 +31,7 @@ class LlamaCppProvider(ModelProvider):
         usage = response.usage
 
         return ModelResponse(
-            text=response.choices[0].message.content or "",
+            content=response.choices[0].message.content or "",
             latency=latency,
             prompt_tokens=usage.prompt_tokens if usage else 0,
             completion_tokens=usage.completion_tokens if usage else 0,
