@@ -1,6 +1,7 @@
 from dataclasses import dataclass
+from openai.types.chat import ChatCompletionMessageParam
 
 @dataclass(frozen=True)
 class ChatPrompt:
-    messages: list[dict]
     version: str
+    messages: list[ChatCompletionMessageParam]

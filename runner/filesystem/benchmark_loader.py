@@ -2,48 +2,42 @@ import json
 from pathlib import Path
 
 from runner.models.benchmark import BenchmarkCase
-from runner.filesystem.paths import BENCHMARK_DIR
+
 
 class BenchmarkLoader:
-
     @staticmethod
-    def load(case_directory: Path):
+    def load(case_directory: Path) -> BenchmarkCase:
+        metadata_path = case_directory / "metadata.json"
+        if not metadata_path.exists():
+            raise FileNotFoundError(
+                f"Missing metadata.json in {case_directory}"
+            )
         metadata = json.loads(
-            (case_directory / "metadata.json").read_text()
+            metadata_path.read_text(encoding="utf-8")
         )
-
-        issue = json.loads(
-            (case_directory / "issue.json").read_text()
-        )
-
-        rule = (
-            case_directory / "rule.md"
-        ).read_text()
-        
+        resources: dict[str, object] = {}
+        project_path = None
+        for entry in case_directory.iterdir():
+            if entry.name == "metadata.json":
+                continue
+            if entry.is_dir():
+                if entry.name == "project":
+                    project_path = entry
+                continue
+            key = entry.stem
+            if entry.suffix == ".json":
+                resources[key] = json.loads(
+                    entry.read_text(encoding="utf-8")
+                )
+            else:
+                resources[key] = entry.read_text(
+                    encoding="utf-8"
+                )
         return BenchmarkCase(
             id=case_directory.name,
             suite=case_directory.parent.name,
-            metadata=metadata,
-            issue=issue,
-            rule_text=rule,
-            project_path=case_directory / "project",
             case_path=case_directory,
-        )
-
-    @staticmethod
-    def load_all_cases():
-        cases = []
-        for suite in BENCHMARK_DIR.iterdir():
-            if not suite.is_dir():
-                continue
-
-            for case in suite.iterdir():
-                if case.is_dir():
-                    cases.append(
-                        BenchmarkLoader.load(case)
-                    )
-
-        return sorted(
-            cases,
-            key=lambda c: c.id
+            project_path=project_path,
+            metadata=metadata,
+            resources=resources,
         )

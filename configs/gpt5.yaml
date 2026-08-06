@@ -1,9 +1,7 @@
 name: GPT-5
-
 provider: openai
-
+model: gpt-5
 temperature: 0
-
-max_tokens: 4000
-
+max_tokens: 4096
 context: 128000
+parameters: {}

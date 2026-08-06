@@ -1,10 +1,11 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class ModelConfig:
     name: str
     provider: str
+    model: str
     temperature: float
     max_tokens: int
     context: int
-    seed: int | None = None
+    parameters: dict = field(default_factory=dict)

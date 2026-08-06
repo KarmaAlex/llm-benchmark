@@ -1,32 +1,43 @@
 import json
+import re
 
+from runner.models.benchmark import BenchmarkCase
 from runner.models.chat_prompt import ChatPrompt
 from runner.models.prompt import Prompt
-from runner.models.benchmark import BenchmarkCase
 
 
 class PromptBuilder:
-
+    @staticmethod
     def build(
-        self,
         prompt: Prompt,
         benchmark: BenchmarkCase,
     ) -> ChatPrompt:
-
         user = prompt.user
         replacements = {
-            "{{rule}}": benchmark.rule_text,
-            "{{issue}}": json.dumps(
-                benchmark.issue,
-                indent=2,
-            ),
-            "{{metadata}}": json.dumps(
-                benchmark.metadata,
-                indent=2,
-            ),
+            "metadata": benchmark.metadata,
+            **benchmark.resources,
         }
-        for key, value in replacements.items():
-            user = user.replace(key, value)
+        for name, value in replacements.items():
+            if not isinstance(value, str):
+                value = json.dumps(
+                    value,
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            placeholder = f"{{{{{name}}}}}"
+            user = user.replace(
+                placeholder,
+                value,
+            )
+        unresolved = re.findall(
+            r"\{\{(.*?)\}\}",
+            user,
+        )
+        if unresolved:
+            raise ValueError(
+                "Unresolved prompt placeholders: "
+                + ", ".join(sorted(unresolved))
+            )
         return ChatPrompt(
             version=prompt.version,
             messages=[
