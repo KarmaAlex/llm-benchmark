@@ -1,0 +1,9 @@
+name: Llama-3.1-8B-Instruct-Q6
+provider: llama.cpp
+model: models/Meta-Llama-3.1-8B-Instruct-Q6_K.gguf
+temperature: 0
+max_tokens: 4096
+context: 32768
+parameters:
+  n_gpu_layers: 10
+  verbose: false

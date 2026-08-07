@@ -1,0 +1,9 @@
+name: Qwen2.5-Coder-3B-Q8
+provider: llama.cpp
+model: models/qwen2.5-coder-3b-instruct-q8_0.gguf
+temperature: 0
+max_tokens: 4096
+context: 32768
+parameters:
+  n_gpu_layers: 36
+  verbose: false

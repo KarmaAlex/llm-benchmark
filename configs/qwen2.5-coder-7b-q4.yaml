@@ -1,0 +1,9 @@
+name: Qwen2.5-Coder-7B-Q4
+provider: llama.cpp
+model: models/qwen2.5-coder-7b-instruct-q4_k_m.gguf
+temperature: 0
+max_tokens: 4096
+context: 32768
+parameters:
+  n_gpu_layers: 16
+  verbose: false
