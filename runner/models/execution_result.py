@@ -2,7 +2,6 @@ from dataclasses import dataclass
 
 @dataclass
 class ExecutionResult:
-
     prompt: str = ""
     raw_response: dict | None = None
     response_text: str | None = None

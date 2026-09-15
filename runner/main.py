@@ -12,7 +12,7 @@ case = BenchmarkLoader.load(
 
 prompt = PromptLoader.load("markdown_v1")
 
-config = ConfigLoader.load("qwen2.5-coder-3b")
+config = ConfigLoader.load("llama-3.1-8B-instruct-q6")
 
 builder = PromptBuilder()
 

@@ -15,7 +15,7 @@ class PromptBuilder:
         user = prompt.user
         replacements = {
             "metadata": benchmark.metadata,
-            **benchmark.resources,
+            **benchmark.resources
         }
         for name, value in replacements.items():
             if not isinstance(value, str):
@@ -29,10 +29,14 @@ class PromptBuilder:
                 placeholder,
                 value,
             )
+        files_concat=""
+        for name, content in benchmark.files.items():
+            files_concat+=name+"\n\n"+content+"\n"
+        user = user.replace("{{files}}", files_concat)
         unresolved = re.findall(
-            r"\{\{(.*?)\}\}",
-            user,
-        )
+                    r"\{\{(.*?)\}\}",
+                    user,
+                )
         if unresolved:
             raise ValueError(
                 "Unresolved prompt placeholders: "

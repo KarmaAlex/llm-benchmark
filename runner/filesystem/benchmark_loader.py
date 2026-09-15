@@ -3,6 +3,7 @@ from pathlib import Path
 
 from runner.models.benchmark import BenchmarkCase
 from runner.filesystem.paths import BENCHMARK_DIR
+from runner.filesystem.project_file_loader import ProjectFileLoader
 
 class BenchmarkLoader:
     @staticmethod
@@ -16,6 +17,7 @@ class BenchmarkLoader:
         metadata = json.loads(
             metadata_path.read_text(encoding="utf-8")
         )
+        file_paths = metadata["files"]
         resources: dict[str, object] = {}
         project_path = None
         for entry in full_path.iterdir():
@@ -34,11 +36,15 @@ class BenchmarkLoader:
                 resources[key] = entry.read_text(
                     encoding="utf-8"
                 )
+        files: dict[str, str] = {}
+        if project_path is None:
+            project_path = BENCHMARK_DIR / case_directory
+        for file_path in file_paths:
+            files[file_path] = ProjectFileLoader.load(project_path, file_path)
         return BenchmarkCase(
             id=case_directory.name,
-            suite=full_path.parent.name,
-            case_path=full_path,
             project_path=project_path,
             metadata=metadata,
             resources=resources,
+            files=files,
         )
