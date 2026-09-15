@@ -1,0 +1,7 @@
+{
+  "rule": "java:S1125",
+  "file": "src/main/java/com/benchmark/library/LibraryService.java",
+  "line": 21,
+  "message": "Remove the redundant boolean literal.",
+  "description": "A boolean expression is explicitly compared with true even though the comparison is unnecessary."
+}

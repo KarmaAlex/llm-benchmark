@@ -1,0 +1,8 @@
+{
+    "id": "S1066_01",
+    "rule": "java:S1066",
+    "files": [
+        "src/main/java/com/benchmark/access/AccessController.java",
+        "pom.xml"
+    ]
+}

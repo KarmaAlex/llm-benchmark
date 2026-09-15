@@ -1,0 +1,8 @@
+{
+    "id": "S1192_01",
+    "rule": "java:S1192",
+    "files": [
+        "src/main/java/com/benchmark/notification/NotificationService.java",
+        "pom.xml"
+    ]
+}

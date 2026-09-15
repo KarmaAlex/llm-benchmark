@@ -1,0 +1,8 @@
+{
+    "id": "S1696_01",
+    "rule": "java:S1696",
+    "files": [
+        "src/main/java/com/benchmark/config/ConfigLoader.java",
+        "pom.xml"
+    ]
+}

@@ -1,0 +1,7 @@
+{
+    "rule": "java:S1854",
+    "file": "src/main/java/com/benchmark/invoice/InvoiceCalculator.java",
+    "line": 6,
+    "message": "Remove this useless assignment to local variable \"discount\".",
+    "description": "The value assigned to \"discount\" on this line is never read: it is unconditionally overwritten on the next line before being used, so the initial assignment is dead code."
+}

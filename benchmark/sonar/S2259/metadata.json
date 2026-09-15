@@ -1,0 +1,11 @@
+{
+    "id": "S2259_01",
+    "rule": "java:S2259",
+    "category": "Null Safety",
+    "severity": 3,
+    "files": [
+        "src/main/java/com/benchmark/User.java",
+        "src/main/java/com/benchmark/UserService.java",
+        "pom.xml"
+    ]
+}

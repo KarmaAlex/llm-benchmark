@@ -1,0 +1,22 @@
+{
+  "id": "chatcmpl-405b661a-2b83-4c25-9e1d-1df0037ba9fe",
+  "object": "chat.completion",
+  "created": 1788087365,
+  "model": "models/qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "18 |         if (member == null || book == null) {  \n19 |             return false;  \n20 |         }  \n21 |         if (member.isActive() == true && book.isAvailable()) {  \n22 |             if (member.getOutstandingLoans() >= MAX_ACTIVE_LOANS) {  \n23 |                 return false;  \n24 |             }  \n25 |         }"
+      },
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 789,
+    "completion_tokens": 88,
+    "total_tokens": 877
+  }
+}

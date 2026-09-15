@@ -1,0 +1,8 @@
+{
+    "id": "S2077_01",
+    "rule": "java:S2077",
+    "files": [
+        "src/main/java/com/benchmark/usersearch/UserSearchDao.java",
+        "pom.xml"
+    ]
+}

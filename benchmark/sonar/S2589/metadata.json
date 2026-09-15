@@ -1,0 +1,8 @@
+{
+    "id": "S2589_01",
+    "rule": "java:S2589",
+    "files": [
+        "src/main/java/com/benchmark/validation/InputValidator.java",
+        "pom.xml"
+    ]
+}

@@ -1,0 +1,7 @@
+{
+    "rule": "java:S3516",
+    "file": "src/main/java/com/benchmark/shipping/ShippingCostCalculator.java",
+    "line": 5,
+    "message": "Refactor this method to not always return the same value.",
+    "description": "Every conditional branch of \"calculateCost\" computes the exact same expression \"weightKg * 1.5\" regardless of the \"shippingMethod\" argument, so the method's non-default return value is invariant. This looks like a copy-paste mistake where each shipping method was meant to use a different rate."
+}

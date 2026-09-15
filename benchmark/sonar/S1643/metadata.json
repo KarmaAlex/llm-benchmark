@@ -1,0 +1,8 @@
+{
+    "id": "S1643_01",
+    "rule": "java:S1643",
+    "files": [
+        "src/main/java/com/benchmark/reportbuilder/ReportBuilder.java",
+        "pom.xml"
+    ]
+}

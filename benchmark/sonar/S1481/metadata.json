@@ -1,0 +1,8 @@
+{
+    "id": "S1481_01",
+    "rule": "java:S1481",
+    "files": [
+        "src/main/java/com/benchmark/report/ReportGenerator.java",
+        "pom.xml"
+    ]
+}

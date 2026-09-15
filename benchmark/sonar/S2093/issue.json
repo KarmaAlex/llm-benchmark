@@ -1,0 +1,7 @@
+{
+    "rule": "java:S2093",
+    "file": "src/main/java/com/benchmark/settings/SettingsLoader.java",
+    "line": 11,
+    "message": "Change this \"try\" to a try-with-resources.",
+    "description": "\"inputStream\" is a \"Closeable\" resource that is manually closed in a \"finally\" block. This should instead be declared in a try-with-resources statement, which is more concise and correctly suppresses any exception from \"close()\" if the try block itself already threw."
+}

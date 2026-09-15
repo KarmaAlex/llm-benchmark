@@ -1,0 +1,8 @@
+{
+    "id": "S3776_01",
+    "rule": "java:S3776",
+    "files": [
+        "src/main/java/com/benchmark/order/OrderValidator.java",
+        "pom.xml"
+    ]
+}

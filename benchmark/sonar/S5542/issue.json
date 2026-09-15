@@ -1,0 +1,7 @@
+{
+    "rule": "java:S5542",
+    "file": "src/main/java/com/benchmark/crypto/DataEncryptionUtil.java",
+    "line": 10,
+    "message": "Use a secure mode and padding scheme.",
+    "description": "\"AES/ECB/PKCS5Padding\" uses ECB mode, which encrypts identical plaintext blocks into identical ciphertext blocks and leaks structural information about the plaintext. A secure mode such as GCM (authenticated) or CBC with a securely generated random IV should be used instead."
+}

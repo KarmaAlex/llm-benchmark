@@ -1,0 +1,7 @@
+{
+    "rule": "java:S2077",
+    "file": "src/main/java/com/benchmark/usersearch/UserSearchDao.java",
+    "line": 19,
+    "message": "Change this code to not construct SQL queries directly from user-controlled data.",
+    "description": "The \"username\" parameter is concatenated directly into the SQL string on line 18 and executed here with a plain \"Statement\", making this method vulnerable to SQL injection. A \"PreparedStatement\" with a bind parameter should be used instead."
+}

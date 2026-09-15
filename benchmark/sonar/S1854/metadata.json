@@ -1,0 +1,8 @@
+{
+    "id": "S1854_01",
+    "rule": "java:S1854",
+    "files": [
+        "src/main/java/com/benchmark/invoice/InvoiceCalculator.java",
+        "pom.xml"
+    ]
+}

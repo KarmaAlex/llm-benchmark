@@ -1,0 +1,7 @@
+{
+    "rule": "java:S1481",
+    "file": "src/main/java/com/benchmark/report/ReportGenerator.java",
+    "line": 8,
+    "message": "Remove this unused \"generatedOn\" local variable.",
+    "description": "The local variable \"generatedOn\" is declared and assigned a value but is never read anywhere in the method, making it dead code that should be removed."
+}

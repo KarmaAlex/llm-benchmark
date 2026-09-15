@@ -1,0 +1,7 @@
+{
+    "rule": "java:S2589",
+    "file": "src/main/java/com/benchmark/validation/InputValidator.java",
+    "line": 6,
+    "message": "This boolean expression's sub-expression \"username != null\" is reused and gratuitous; remove or correct one usage.",
+    "description": "The condition \"username != null\" is repeated twice with \"&&\" between the same two occurrences, which is always redundant since both sub-expressions always evaluate the same way. One of the duplicated checks should be removed."
+}

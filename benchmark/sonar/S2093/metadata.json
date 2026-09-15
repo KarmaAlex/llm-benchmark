@@ -1,0 +1,8 @@
+{
+    "id": "S2093_01",
+    "rule": "java:S2093",
+    "files": [
+        "src/main/java/com/benchmark/settings/SettingsLoader.java",
+        "pom.xml"
+    ]
+}

@@ -1,0 +1,10 @@
+{
+    "id": "S2789_01",
+    "rule": "java:S2789",
+    "files": [
+        "src/main/java/com/benchmark/userlookup/User.java",
+        "src/main/java/com/benchmark/userlookup/UserRepository.java",
+        "src/main/java/com/benchmark/userlookup/UserController.java",
+        "pom.xml"
+    ]
+}

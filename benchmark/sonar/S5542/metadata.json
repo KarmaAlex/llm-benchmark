@@ -1,0 +1,8 @@
+{
+    "id": "S5542_01",
+    "rule": "java:S5542",
+    "files": [
+        "src/main/java/com/benchmark/crypto/DataEncryptionUtil.java",
+        "pom.xml"
+    ]
+}

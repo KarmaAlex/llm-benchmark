@@ -1,0 +1,8 @@
+{
+    "id": "S2583_01",
+    "rule": "java:S2583",
+    "files": [
+        "src/main/java/com/benchmark/flags/FeatureFlagEvaluator.java",
+        "pom.xml"
+    ]
+}

@@ -1,0 +1,9 @@
+{
+    "id": "S2095_01",
+    "rule": "java:S2095",
+    "files": [
+        "src/main/java/com/benchmark/loganalyzer/LogFileReader.java",
+        "src/main/java/com/benchmark/loganalyzer/LogAnalyzer.java",
+        "pom.xml"
+    ]
+}

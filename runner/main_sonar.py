@@ -11,7 +11,7 @@ from runner.providers.factory import ProviderFactory
 
 
 case = BenchmarkLoader.load(
-    Path("sonar/S1125")
+    Path("sonar/S1643")
 )
 
 prompt = PromptLoader.load("sonar_v2")

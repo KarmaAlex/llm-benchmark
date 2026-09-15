@@ -1,0 +1,13 @@
+{
+  "id": "S1125_01",
+  "rule": "java:S1125",
+  "files": [
+    "src/main/java/com/benchmark/library/Book.java",
+    "src/main/java/com/benchmark/library/Member.java",
+    "src/main/java/com/benchmark/library/Loan.java",
+    "src/main/java/com/benchmark/library/Library.java",
+    "src/main/java/com/benchmark/library/LibraryService.java",
+    "src/test/java/com/benchmark/library/LibraryServiceTest.java",
+    "pom.xml"
+  ]
+}

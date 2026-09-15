@@ -1,0 +1,7 @@
+{
+    "rule": "java:S2789",
+    "file": "src/main/java/com/benchmark/userlookup/UserController.java",
+    "line": 12,
+    "message": "Optional value should only be accessed after confirming it contains a value.",
+    "description": "\"userRepository.findById(id)\" returns an \"Optional<User>\" (see UserRepository.java), and this line calls \".get()\" on it without first checking \"isPresent()\"/\"isEmpty()\". If no user exists for the given id, this throws a \"NoSuchElementException\" at runtime instead of handling the missing-user case explicitly."
+}

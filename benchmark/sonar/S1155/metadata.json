@@ -1,0 +1,8 @@
+{
+    "id": "S1155_01",
+    "rule": "java:S1155",
+    "files": [
+        "src/main/java/com/benchmark/cart/ShoppingCart.java",
+        "pom.xml"
+    ]
+}

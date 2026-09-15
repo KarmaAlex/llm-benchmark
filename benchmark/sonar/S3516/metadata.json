@@ -1,0 +1,8 @@
+{
+    "id": "S3516_01",
+    "rule": "java:S3516",
+    "files": [
+        "src/main/java/com/benchmark/shipping/ShippingCostCalculator.java",
+        "pom.xml"
+    ]
+}
