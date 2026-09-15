@@ -1,0 +1,53 @@
+{
+    "Revenue": [
+        {
+            "product_line": "Core Platform",
+            "q1_revenue_k": "4200",
+            "yoy_growth": "12%"
+        },
+        {
+            "product_line": "Analytics Add-on",
+            "q1_revenue_k": "980",
+            "yoy_growth": "34%"
+        },
+        {
+            "product_line": "Professional Services",
+            "q1_revenue_k": "610",
+            "yoy_growth": "-5%"
+        }
+    ],
+    "Customer Retention": [
+        {
+            "segment": "Enterprise",
+            "renewal_rate": "96%",
+            "net_revenue_retention": "118%"
+        },
+        {
+            "segment": "Mid-Market",
+            "renewal_rate": "88%",
+            "net_revenue_retention": "104%"
+        },
+        {
+            "segment": "SMB",
+            "renewal_rate": "74%",
+            "net_revenue_retention": "91%"
+        }
+    ],
+    "Support Metrics": [
+        {
+            "metric": "Median First Response Time",
+            "value": "2.1h",
+            "target": "4h"
+        },
+        {
+            "metric": "CSAT",
+            "value": "4.6",
+            "target": "4.5"
+        },
+        {
+            "metric": "Open Critical Tickets",
+            "value": "3",
+            "target": "5"
+        }
+    ]
+}

@@ -1,0 +1,22 @@
+[
+    {
+        "decision": "Adopt Kafka as the standard event bus for new services.",
+        "owner": "Ravi Chandran",
+        "due": "2026-05-01"
+    },
+    {
+        "decision": "Draft a schema governance policy for event payloads.",
+        "owner": "Lena Ostrowski",
+        "due": "2026-04-28"
+    },
+    {
+        "decision": "Existing SQS-based integrations will not be migrated retroactively.",
+        "owner": "Diane Foss",
+        "due": "2026-04-14"
+    },
+    {
+        "decision": "Schedule a follow-up session on schema governance open questions.",
+        "owner": "Tomasz Bilski",
+        "due": "2026-04-21"
+    }
+]

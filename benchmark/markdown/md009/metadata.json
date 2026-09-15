@@ -1,0 +1,8 @@
+{
+    "category": "multi-table-grouping",
+    "difficulty": 5,
+    "description": "Extract multiple markdown tables from a quarterly business review, grouped by their section heading.",
+    "files": [
+        "document.md"
+    ]
+}

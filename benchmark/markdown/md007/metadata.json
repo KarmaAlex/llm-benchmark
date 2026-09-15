@@ -1,0 +1,8 @@
+{
+    "category": "heading-tree",
+    "difficulty": 4,
+    "description": "Extract the nested heading hierarchy from an employee handbook table of contents.",
+    "files": [
+        "document.md"
+    ]
+}

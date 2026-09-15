@@ -1,0 +1,8 @@
+{
+    "category": "key-value-metadata",
+    "difficulty": 2,
+    "description": "Extract the key-value metadata block from a project charter document.",
+    "files": [
+        "document.md"
+    ]
+}

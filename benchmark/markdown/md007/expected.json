@@ -1,0 +1,93 @@
+[
+    {
+        "level": 1,
+        "text": "Employee Handbook",
+        "children": [
+            {
+                "level": 2,
+                "text": "Getting Started",
+                "children": [
+                    {
+                        "level": 3,
+                        "text": "Your First Week",
+                        "children": []
+                    },
+                    {
+                        "level": 3,
+                        "text": "Setting Up Your Workstation",
+                        "children": []
+                    }
+                ]
+            },
+            {
+                "level": 2,
+                "text": "Compensation and Benefits",
+                "children": [
+                    {
+                        "level": 3,
+                        "text": "Payroll Schedule",
+                        "children": []
+                    },
+                    {
+                        "level": 3,
+                        "text": "Health Insurance",
+                        "children": [
+                            {
+                                "level": 4,
+                                "text": "Enrollment Deadlines",
+                                "children": []
+                            },
+                            {
+                                "level": 4,
+                                "text": "Dependent Coverage",
+                                "children": []
+                            }
+                        ]
+                    },
+                    {
+                        "level": 3,
+                        "text": "Retirement Plan",
+                        "children": []
+                    }
+                ]
+            },
+            {
+                "level": 2,
+                "text": "Time Off",
+                "children": [
+                    {
+                        "level": 3,
+                        "text": "Vacation Policy",
+                        "children": []
+                    },
+                    {
+                        "level": 3,
+                        "text": "Sick Leave",
+                        "children": []
+                    },
+                    {
+                        "level": 3,
+                        "text": "Parental Leave",
+                        "children": []
+                    }
+                ]
+            },
+            {
+                "level": 2,
+                "text": "Workplace Conduct",
+                "children": [
+                    {
+                        "level": 3,
+                        "text": "Code of Conduct",
+                        "children": []
+                    },
+                    {
+                        "level": 3,
+                        "text": "Reporting Concerns",
+                        "children": []
+                    }
+                ]
+            }
+        ]
+    }
+]

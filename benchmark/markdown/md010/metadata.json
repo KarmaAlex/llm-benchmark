@@ -1,0 +1,8 @@
+{
+    "category": "composite-extraction",
+    "difficulty": 5,
+    "description": "Extract headings, action items, and a decision log from a single incident postmortem document.",
+    "files": [
+        "document.md"
+    ]
+}

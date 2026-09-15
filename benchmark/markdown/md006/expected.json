@@ -1,0 +1,14 @@
+[
+    {
+        "language": "promql",
+        "code": "histogram_quantile(0.99, sum(rate(payment_service_request_duration_seconds_bucket[5m])) by (le))"
+    },
+    {
+        "language": "bash",
+        "code": "curl -s https://status.internal.example.com/api/services/card-processor | jq .status"
+    },
+    {
+        "language": null,
+        "code": "kubectl rollout restart deployment/payment-service -n payments"
+    }
+]

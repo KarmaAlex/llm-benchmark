@@ -1,0 +1,8 @@
+{
+    "category": "checklists",
+    "difficulty": 1,
+    "description": "Extract the action-item checklist from a meeting notes document.",
+    "files": [
+        "document.md"
+    ]
+}

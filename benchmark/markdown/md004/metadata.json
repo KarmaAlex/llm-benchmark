@@ -1,0 +1,8 @@
+{
+    "category": "links",
+    "difficulty": 2,
+    "description": "Extract the 'See Also' links from an internal knowledge-base article.",
+    "files": [
+        "document.md"
+    ]
+}

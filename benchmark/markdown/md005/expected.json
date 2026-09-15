@@ -1,0 +1,32 @@
+[
+    {
+        "department": "Engineering",
+        "headcount": 142,
+        "open_requisitions": 12,
+        "attrition_rate": "4.2%"
+    },
+    {
+        "department": "Sales",
+        "headcount": 68,
+        "open_requisitions": 5,
+        "attrition_rate": "6.1%"
+    },
+    {
+        "department": "Customer Support",
+        "headcount": 51,
+        "open_requisitions": 3,
+        "attrition_rate": "8.5%"
+    },
+    {
+        "department": "Product",
+        "headcount": 24,
+        "open_requisitions": 2,
+        "attrition_rate": "2.0%"
+    },
+    {
+        "department": "Finance",
+        "headcount": 19,
+        "open_requisitions": 1,
+        "attrition_rate": "1.5%"
+    }
+]

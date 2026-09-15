@@ -1,0 +1,18 @@
+[
+    {
+        "text": "Identity Provider Setup Guide",
+        "url": "https://wiki.internal.example.com/idp-setup"
+    },
+    {
+        "text": "Access Group Management",
+        "url": "https://wiki.internal.example.com/access-groups"
+    },
+    {
+        "text": "SSO Troubleshooting Runbook",
+        "url": "https://runbooks.internal.example.com/sso-troubleshooting"
+    },
+    {
+        "text": "Portal Architecture Overview",
+        "url": "https://wiki.internal.example.com/portal-architecture"
+    }
+]

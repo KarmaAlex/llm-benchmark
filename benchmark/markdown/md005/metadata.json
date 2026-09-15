@@ -1,0 +1,8 @@
+{
+    "category": "tables",
+    "difficulty": 3,
+    "description": "Extract a markdown table from a quarterly headcount report into an array of row objects.",
+    "files": [
+        "document.md"
+    ]
+}

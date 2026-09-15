@@ -1,0 +1,31 @@
+{
+    "summary_headings": [
+        {"level": 1, "text": "Postmortem: Checkout Service Outage — 2026-06-11"},
+        {"level": 2, "text": "Summary"},
+        {"level": 2, "text": "Timeline"},
+        {"level": 3, "text": "Detection"},
+        {"level": 3, "text": "Mitigation"},
+        {"level": 2, "text": "Action Items"},
+        {"level": 2, "text": "Decisions"},
+        {"level": 2, "text": "Follow-Up"}
+    ],
+    "action_items": [
+        {"text": "Roll back the faulty deploy", "done": true},
+        {"text": "Restore the connection pool tuning parameters", "done": true},
+        {"text": "Add a regression test for connection pool configuration", "done": false},
+        {"text": "Add an alert for connection pool saturation before it causes errors", "done": false},
+        {"text": "Document the connection pool tuning parameters in the service README", "done": false}
+    ],
+    "decisions": [
+        {
+            "decision": "Require a peer review specifically for connection pool configuration changes.",
+            "owner": "Grace Liu",
+            "due": "2026-06-18"
+        },
+        {
+            "decision": "Add connection pool saturation to the standard pre-deploy checklist.",
+            "owner": "Amir Hassan",
+            "due": "2026-06-25"
+        }
+    ]
+}

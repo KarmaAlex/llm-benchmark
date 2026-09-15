@@ -1,0 +1,8 @@
+{
+    "category": "structured-text-parsing",
+    "difficulty": 4,
+    "description": "Parse structured decision entries (decision/owner/due date) out of free-text meeting minutes.",
+    "files": [
+        "document.md"
+    ]
+}

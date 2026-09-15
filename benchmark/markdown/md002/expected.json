@@ -1,0 +1,22 @@
+[
+    {
+        "text": "Finalize the retry-policy design doc",
+        "done": true
+    },
+    {
+        "text": "Add integration tests for the payment gateway timeout path",
+        "done": false
+    },
+    {
+        "text": "Update the on-call runbook with the new alert thresholds",
+        "done": false
+    },
+    {
+        "text": "Schedule a design review with the fraud team",
+        "done": true
+    },
+    {
+        "text": "Migrate the feature flag from LaunchDarkly to the internal flag service",
+        "done": false
+    }
+]

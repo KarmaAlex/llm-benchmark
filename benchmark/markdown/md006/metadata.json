@@ -1,0 +1,8 @@
+{
+    "category": "code-blocks",
+    "difficulty": 3,
+    "description": "Extract fenced code blocks and their language tags from an incident runbook.",
+    "files": [
+        "document.md"
+    ]
+}
