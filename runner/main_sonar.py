@@ -4,15 +4,9 @@ from dataclasses import replace
 from pathlib import Path
 
 from runner.sonar_tests.compiler import Compiler
-from runner.sonar_tests.patch_applier import PatchApplier
+from runner.sonar_tests.edit_pipeline import PROMPT_NAME_BY_EDIT_MODE, apply_model_response
 from runner.sonar_tests.workspace import Workspace
-from runner.structured_edit import (
-    EDIT_FILE_TOOL_SCHEMA,
-    EditCall,
-    StructuredEditParseError,
-    StructuredEditParser,
-    apply_edits,
-)
+from runner.structured_edit import EDIT_FILE_TOOL_SCHEMA
 from runner.filesystem.benchmark_loader import BenchmarkLoader
 from runner.filesystem.config_loader import ConfigLoader
 from runner.filesystem.prompt_loader import PromptLoader
@@ -53,12 +47,14 @@ case = BenchmarkLoader.load(
 
 config = ConfigLoader.load(args.config)
 
-if args.edit_mode == "diff":
-    prompt = PromptLoader.load("sonar_v2")
-elif args.edit_mode == "structured":
-    prompt = PromptLoader.load("sonar_structured_v1")
-else:
-    prompt = PromptLoader.load("sonar_toolcall_v1")
+if args.edit_mode == "toolcall" and not config.supports_tools:
+    print(
+        f"Model config '{config.name}' does not have supports_tools "
+        "enabled. Use --edit-mode structured for this model instead."
+    )
+    raise SystemExit(1)
+
+prompt = PromptLoader.load(PROMPT_NAME_BY_EDIT_MODE[args.edit_mode])
 
 chat_prompt = PromptBuilder.build(
     prompt,
@@ -66,12 +62,6 @@ chat_prompt = PromptBuilder.build(
 )
 
 if args.edit_mode == "toolcall":
-    if not config.supports_tools:
-        print(
-            f"Model config '{config.name}' does not have supports_tools "
-            "enabled. Use --edit-mode structured for this model instead."
-        )
-        raise SystemExit(1)
     chat_prompt = replace(chat_prompt, tools=[EDIT_FILE_TOOL_SCHEMA])
 
 print(f"Prompt:\n{chat_prompt}\n\n")
@@ -101,55 +91,23 @@ project_directory = Workspace.create(
 
 print(f"Response:\n{response.content}")
 
-if args.edit_mode == "diff":
-    patch_result = PatchApplier.apply(
-        project_directory,
-        response.content,
-    )
+outcome = apply_model_response(args.edit_mode, project_directory, response)
 
-    print(f"Patch applied: {patch_result.applied}")
+print(f"Applied: {outcome.applied}")
 
-    if not patch_result.applied:
-        print(patch_result.error)
-        raise SystemExit(1)
-
-else:
-    if args.edit_mode == "toolcall":
-        if not response.tool_calls:
-            print("Model returned no tool calls.")
-            raise SystemExit(1)
-        edits = [
-            EditCall(
-                path=call["arguments"]["path"],
-                search=call["arguments"]["search"],
-                replacement=call["arguments"]["replacement"],
-                occurrence=call["arguments"].get("occurrence", 1),
-            )
-            for call in response.tool_calls
-            if call["name"] == "edit_file"
-        ]
-    else:
-        try:
-            edits = StructuredEditParser.parse(response.content)
-        except StructuredEditParseError as e:
-            print(f"Failed to parse structured edits: {e}")
-            raise SystemExit(1)
-
-    edit_result = apply_edits(project_directory, edits)
-
-    print(f"Edits applied: {edit_result.applied}")
-    for outcome in edit_result.edit_results:
+if outcome.edit_results is not None:
+    for result in outcome.edit_results:
         print(
-            f"  {outcome.path}: applied={outcome.applied} "
-            f"kind={outcome.match_kind} similarity={outcome.similarity} "
-            f"error={outcome.error}"
+            f"  {result.path}: applied={result.applied} "
+            f"kind={result.match_kind} similarity={result.similarity} "
+            f"error={result.error}"
         )
 
-    if not edit_result.applied:
-        print(edit_result.error)
-        raise SystemExit(1)
+if not outcome.applied:
+    print(outcome.error)
+    raise SystemExit(1)
 
-    print(f"Diff:\n{edit_result.diff}")
+print(f"Diff:\n{outcome.diff}")
 
 compilation = Compiler.compile(
     project_directory

@@ -405,6 +405,22 @@ def apply_edits(project_directory: Path, edits: list[EditCall]) -> EditApplyResu
     )
 
 
+def edits_from_tool_calls(tool_calls: list[dict[str, Any]]) -> list[EditCall]:
+    """Build EditCalls from the provider-agnostic tool_calls shape on ModelResponse."""
+    edits: list[EditCall] = []
+    for call in tool_calls:
+        if call.get("name") != "edit_file":
+            continue
+        arguments = call.get("arguments", {})
+        edits.append(EditCall(
+            path=arguments["path"],
+            search=arguments["search"],
+            replacement=arguments["replacement"],
+            occurrence=arguments.get("occurrence", 1),
+        ))
+    return edits
+
+
 def generate_diff(original_files: dict[str, str], updated_files: dict[str, str]) -> str:
     """Build a standard unified diff for every changed file."""
     chunks: list[str] = []
