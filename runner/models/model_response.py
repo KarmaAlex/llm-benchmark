@@ -9,3 +9,4 @@ class ModelResponse:
     completion_tokens: int
     finish_reason: str | None
     raw: dict[str,Any]
+    tool_calls: list[dict[str, Any]] | None = None
