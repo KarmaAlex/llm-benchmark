@@ -6,6 +6,7 @@ from pathlib import Path
 from runner.sonar_tests.compiler import Compiler
 from runner.sonar_tests.edit_pipeline import PROMPT_NAME_BY_EDIT_MODE, apply_model_response
 from runner.sonar_tests.workspace import Workspace
+from runner.stats import tokens_per_second
 from runner.structured_edit import EDIT_FILE_TOOL_SCHEMA
 from runner.filesystem.benchmark_loader import BenchmarkLoader
 from runner.filesystem.config_loader import ConfigLoader
@@ -39,6 +40,12 @@ parser.add_argument(
         "model config)."
     ),
 )
+parser.add_argument(
+    "--device",
+    choices=["cuda", "cpu"],
+    default="cuda",
+    help="Run local (llama.cpp) models on the GPU (default) or force CPU-only.",
+)
 args = parser.parse_args()
 
 case = BenchmarkLoader.load(
@@ -46,6 +53,7 @@ case = BenchmarkLoader.load(
 )
 
 config = ConfigLoader.load(args.config)
+config = ConfigLoader.apply_device(config, args.device)
 
 if args.edit_mode == "toolcall" and not config.supports_tools:
     print(
@@ -70,6 +78,16 @@ provider = ProviderFactory.create(config)
 
 response = provider.generate(
     chat_prompt
+)
+
+print(
+    f"Tokens: {response.prompt_tokens} prompt + {response.completion_tokens} "
+    f"completion = {response.prompt_tokens + response.completion_tokens} total "
+    f"(finish_reason={response.finish_reason})"
+)
+print(
+    f"Latency: {response.latency:.2f}s "
+    f"({tokens_per_second(response.completion_tokens, response.latency):.1f} tok/s)"
 )
 
 run_directory = Path(

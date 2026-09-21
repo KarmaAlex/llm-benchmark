@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 import yaml
@@ -14,3 +15,22 @@ class ConfigLoader:
             raise FileNotFoundError(f"Model config not found: {path}")
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
         return ModelConfig(**data)
+
+    @staticmethod
+    def apply_device(config: ModelConfig, device: str) -> ModelConfig:
+        """
+        Override a llama.cpp config's GPU offload for this run without
+        touching the underlying YAML file. 'cuda' (the default) leaves the
+        config's own n_gpu_layers untouched; 'cpu' forces it to 0 so the
+        model runs entirely on CPU. No-op for non-llama.cpp providers.
+        """
+        if device == "cuda":
+            return config
+
+        if device == "cpu":
+            return replace(
+                config,
+                parameters={**config.parameters, "n_gpu_layers": 0},
+            )
+
+        raise ValueError(f"Unknown device: {device}")
