@@ -1,11 +1,11 @@
-name: GPT-5-mini
+name: GPT-5-mini (markdown)
 provider: openai
 model: gpt-5-mini
 # gpt-5 accepts only the default temperature, so supports_temperature below
 # keeps this field out of the request. Kept for the ModelConfig contract.
 temperature: 1
 # Sent as max_completion_tokens (see max_tokens_param); includes reasoning tokens.
-max_tokens: 16384
+max_tokens: 8192
 context: 400000
 parameters:
   max_tokens_param: max_completion_tokens
@@ -13,6 +13,6 @@ parameters:
   timeout: 600
   max_retries: 3
 sampling:
-  reasoning_effort: medium
+  reasoning_effort: low
   verbosity: low
 supports_tools: true

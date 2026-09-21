@@ -1,6 +1,6 @@
-name: GPT-5-mini
+name: GPT-5 (sonar)
 provider: openai
-model: gpt-5-mini
+model: gpt-5
 # gpt-5 accepts only the default temperature, so supports_temperature below
 # keeps this field out of the request. Kept for the ModelConfig contract.
 temperature: 1
@@ -13,6 +13,6 @@ parameters:
   timeout: 600
   max_retries: 3
 sampling:
-  reasoning_effort: medium
+  reasoning_effort: high
   verbosity: low
 supports_tools: true

@@ -1,4 +1,4 @@
-name: Phi4-mini-instruct-q4
+name: Phi4-mini-instruct-q4 (sonar)
 provider: llama.cpp
 model: models/Phi-4-mini-instruct-Q4_K_M.gguf
 temperature: 0

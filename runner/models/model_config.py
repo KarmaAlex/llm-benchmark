@@ -9,4 +9,5 @@ class ModelConfig:
     max_tokens: int
     context: int
     parameters: dict = field(default_factory=dict)
+    sampling: dict = field(default_factory=dict)
     supports_tools: bool = False

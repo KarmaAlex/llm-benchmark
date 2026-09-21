@@ -1,4 +1,4 @@
-name: GPT-5-mini
+name: GPT-5-mini (sonar)
 provider: openai
 model: gpt-5-mini
 # gpt-5 accepts only the default temperature, so supports_temperature below
@@ -13,6 +13,6 @@ parameters:
   timeout: 600
   max_retries: 3
 sampling:
-  reasoning_effort: medium
+  reasoning_effort: high
   verbosity: low
 supports_tools: true

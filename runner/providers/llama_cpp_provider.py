@@ -57,6 +57,7 @@ class LlamaCppProvider(ModelProvider):
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
             stream=False,
+            **self.config.sampling,
         )
 
         if prompt.tools and self.config.supports_tools:

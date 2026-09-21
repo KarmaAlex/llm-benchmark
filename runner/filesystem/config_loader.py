@@ -24,7 +24,10 @@ class ConfigLoader:
         config's own n_gpu_layers untouched; 'cpu' forces it to 0 so the
         model runs entirely on CPU. No-op for non-llama.cpp providers.
         """
-        if device == "cuda":
+        if device not in ("cuda", "cpu"):
+            raise ValueError(f"Unknown device: {device}")
+
+        if config.provider != "llama.cpp":
             return config
 
         if device == "cpu":
@@ -33,4 +36,4 @@ class ConfigLoader:
                 parameters={**config.parameters, "n_gpu_layers": 0},
             )
 
-        raise ValueError(f"Unknown device: {device}")
+        return config
