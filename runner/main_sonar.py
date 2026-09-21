@@ -5,6 +5,7 @@ from pathlib import Path
 
 from runner.sonar_tests.compiler import Compiler
 from runner.sonar_tests.edit_pipeline import PROMPT_NAME_BY_EDIT_MODE, apply_model_response
+from runner.sonar_tests.test_runner import TestRunner
 from runner.sonar_tests.workspace import Workspace
 from runner.stats import tokens_per_second
 from runner.structured_edit import EDIT_FILE_TOOL_SCHEMA
@@ -139,3 +140,18 @@ print(
     f"Compilation time: "
     f"{compilation.execution_time:.2f}s"
 )
+
+if compilation.compiled:
+    test_execution = TestRunner.run(
+        project_directory
+    )
+
+    print(
+        f"Tests ran: {test_execution.ran}, passed: {test_execution.passed} "
+        f"({test_execution.tests_run - test_execution.failures - test_execution.errors}/"
+        f"{test_execution.tests_run} passing, {test_execution.failures} failures, "
+        f"{test_execution.errors} errors, {test_execution.skipped} skipped)"
+    )
+    print(
+        f"Test execution time: {test_execution.execution_time:.2f}s"
+    )

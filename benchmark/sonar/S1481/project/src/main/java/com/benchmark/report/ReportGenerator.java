@@ -10,9 +10,18 @@ public class ReportGenerator {
 
         builder.append(title);
         builder.append(" - ");
-        builder.append(itemCount);
-        builder.append(" items");
+        builder.append(formatItemCount(itemCount));
 
         return builder.toString();
+    }
+
+    private String formatItemCount(int itemCount) {
+        if (itemCount == 0) {
+            return "no items";
+        }
+        if (itemCount == 1) {
+            return "1 item";
+        }
+        return itemCount + " items";
     }
 }

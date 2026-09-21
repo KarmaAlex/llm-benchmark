@@ -11,4 +11,14 @@ public class FeatureFlagEvaluator {
 
         return featureName + " is not currently available.";
     }
+
+    public String describeDarkModeAccess(String featureName) {
+        boolean darkModeEnabled = true;
+
+        if (darkModeEnabled) {
+            return featureName + " is available with dark mode support.";
+        }
+
+        return featureName + " is not currently available.";
+    }
 }

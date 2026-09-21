@@ -24,3 +24,16 @@ class CompilationResult:
     stdout: str
     stderr: str
     execution_time: float
+
+@dataclass(frozen=True)
+class TestExecutionResult:
+    ran: bool
+    passed: bool
+    tests_run: int
+    failures: int
+    errors: int
+    skipped: int
+    command: list[str]
+    stdout: str
+    stderr: str
+    execution_time: float

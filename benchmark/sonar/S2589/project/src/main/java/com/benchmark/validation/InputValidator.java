@@ -4,9 +4,15 @@ public class InputValidator {
 
     public boolean isValidUsername(String username) {
         if (username != null && username != null && !username.isBlank()) {
-            return username.length() >= 3 && username.length() <= 20;
+            return username.length() >= 3
+                    && username.length() <= 20
+                    && username.chars().allMatch(InputValidator::isAllowedCharacter);
         }
 
         return false;
+    }
+
+    private static boolean isAllowedCharacter(int c) {
+        return Character.isLetterOrDigit(c) || c == '_';
     }
 }

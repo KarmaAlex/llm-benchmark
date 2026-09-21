@@ -7,7 +7,6 @@
     "src/main/java/com/benchmark/library/Loan.java",
     "src/main/java/com/benchmark/library/Library.java",
     "src/main/java/com/benchmark/library/LibraryService.java",
-    "src/test/java/com/benchmark/library/LibraryServiceTest.java",
     "pom.xml"
   ]
 }

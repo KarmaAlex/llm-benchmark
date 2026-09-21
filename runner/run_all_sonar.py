@@ -25,6 +25,7 @@ from runner.providers.base import ModelProvider
 from runner.providers.factory import ProviderFactory
 from runner.sonar_tests.compiler import Compiler
 from runner.sonar_tests.edit_pipeline import PROMPT_NAME_BY_EDIT_MODE, apply_model_response
+from runner.sonar_tests.test_runner import TestRunner
 from runner.sonar_tests.workspace import Workspace
 from runner.stats import tokens_per_second
 from runner.structured_edit import EDIT_FILE_TOOL_SCHEMA
@@ -38,6 +39,12 @@ class SonarCaseResult:
     compiled: bool
     execution_time: float
     compile_time: float
+    tests_ran: bool = False
+    tests_passed: bool = False
+    tests_run_count: int = 0
+    tests_failed: int = 0
+    tests_errored: int = 0
+    test_time: float = 0.0
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
@@ -66,13 +73,15 @@ def _edit_match_summary(edit_results) -> str | None:
     return ", ".join(f"{count} {kind}" for kind, count in sorted(counts.items()))
 
 
-def run_case(
+def generate_case(
     case_id: str,
     edit_mode: str,
     provider: ModelProvider,
     prompt,
     run_directory: Path,
 ) -> SonarCaseResult:
+    """Generate a model response and apply it to a fresh workspace, without
+    compiling or running tests. See validate_case() for that phase."""
     case = BenchmarkLoader.load(Path("sonar") / case_id)
     chat_prompt = PromptBuilder.build(prompt, case)
 
@@ -102,44 +111,78 @@ def run_case(
         edit_match_summary=_edit_match_summary(outcome.edit_results),
     )
 
-    if not outcome.applied:
-        return SonarCaseResult(
-            case_id=case_id,
-            edit_mode=edit_mode,
-            applied=False,
-            compiled=False,
-            execution_time=response.latency,
-            compile_time=0.0,
-            error=outcome.error,
-            response_text=response.content,
-            diff=outcome.diff,
-            **token_stats,
-        )
-
-    compilation = Compiler.compile(project_directory)
-
     return SonarCaseResult(
         case_id=case_id,
         edit_mode=edit_mode,
-        applied=True,
-        compiled=compilation.compiled,
+        applied=outcome.applied,
+        compiled=False,
         execution_time=response.latency,
-        compile_time=compilation.execution_time,
-        error=None if compilation.compiled else compilation.stderr,
+        compile_time=0.0,
+        error=outcome.error if not outcome.applied else None,
         response_text=response.content,
         diff=outcome.diff,
         **token_stats,
     )
 
 
+def validate_case(case_directory: Path) -> dict:
+    """Compile and run tests for a case directory previously produced by
+    generate_case() (i.e. containing an already-patched project/ folder).
+    Returns a dict of SonarCaseResult field updates suitable for
+    dataclasses.replace()."""
+    project_directory = case_directory / "project"
+
+    compilation = Compiler.compile(project_directory)
+
+    if not compilation.compiled:
+        return dict(
+            compiled=False,
+            compile_time=compilation.execution_time,
+            error=compilation.stderr,
+        )
+
+    test_execution = TestRunner.run(project_directory)
+
+    return dict(
+        compiled=True,
+        compile_time=compilation.execution_time,
+        tests_ran=test_execution.ran,
+        tests_passed=test_execution.passed,
+        tests_run_count=test_execution.tests_run,
+        tests_failed=test_execution.failures,
+        tests_errored=test_execution.errors,
+        test_time=test_execution.execution_time,
+        error=None if test_execution.passed else test_execution.stderr,
+    )
+
+
+def run_case(
+    case_id: str,
+    edit_mode: str,
+    provider: ModelProvider,
+    prompt,
+    run_directory: Path,
+) -> SonarCaseResult:
+    result = generate_case(case_id, edit_mode, provider, prompt, run_directory)
+
+    if not result.applied:
+        return result
+
+    validation = validate_case(run_directory / case_id)
+    return replace(result, **validation)
+
+
 def compute_summary(results: list[SonarCaseResult], wall_time: float) -> dict:
     total = len(results)
     applied_count = sum(1 for r in results if r.applied)
     compiled_count = sum(1 for r in results if r.compiled)
+    tests_ran_count = sum(1 for r in results if r.tests_ran)
+    tests_passed_count = sum(1 for r in results if r.tests_passed)
     total_prompt_tokens = sum(r.prompt_tokens for r in results)
     total_completion_tokens = sum(r.completion_tokens for r in results)
     total_execution_time = sum(r.execution_time for r in results)
     total_compile_time = sum(r.compile_time for r in results)
+    total_test_time = sum(r.test_time for r in results)
 
     return {
         "total_cases": total,
@@ -147,6 +190,9 @@ def compute_summary(results: list[SonarCaseResult], wall_time: float) -> dict:
         "applied_rate": applied_count / total if total else 0.0,
         "compiled_count": compiled_count,
         "compiled_rate": compiled_count / total if total else 0.0,
+        "tests_ran_count": tests_ran_count,
+        "tests_passed_count": tests_passed_count,
+        "tests_passed_rate": tests_passed_count / compiled_count if compiled_count else 0.0,
         "total_prompt_tokens": total_prompt_tokens,
         "total_completion_tokens": total_completion_tokens,
         "total_tokens": total_prompt_tokens + total_completion_tokens,
@@ -154,18 +200,23 @@ def compute_summary(results: list[SonarCaseResult], wall_time: float) -> dict:
         "avg_execution_time": total_execution_time / total if total else 0.0,
         "total_execution_time": total_execution_time,
         "total_compile_time": total_compile_time,
+        "total_test_time": total_test_time,
         "wall_time": wall_time,
     }
 
 
 def print_report(results: list[SonarCaseResult], summary: dict) -> None:
     print(
-        f"\n{'Case':<10} {'Applied':<9} {'Compiled':<10} {'Time (s)':<10} "
+        f"\n{'Case':<10} {'Applied':<9} {'Compiled':<10} {'Tests':<14} {'Time (s)':<10} "
         f"{'Tokens':<9} {'Tok/s':<8} {'Match':<16} Error"
     )
     for r in results:
+        if not r.tests_ran:
+            tests_summary = "n/a"
+        else:
+            tests_summary = f"{r.tests_run_count - r.tests_failed - r.tests_errored}/{r.tests_run_count}"
         print(
-            f"{r.case_id:<10} {str(r.applied):<9} {str(r.compiled):<10} "
+            f"{r.case_id:<10} {str(r.applied):<9} {str(r.compiled):<10} {tests_summary:<14} "
             f"{r.execution_time:<10.2f} {r.total_tokens:<9} "
             f"{r.tokens_per_second:<8.1f} {r.edit_match_summary or '':<16} {r.error or ''}"
         )
@@ -174,13 +225,16 @@ def print_report(results: list[SonarCaseResult], summary: dict) -> None:
           f"({summary['applied_rate']:.0%})")
     print(f"Compiled: {summary['compiled_count']}/{summary['total_cases']} "
           f"({summary['compiled_rate']:.0%})")
+    print(f"Tests passed: {summary['tests_passed_count']}/{summary['compiled_count']} "
+          f"of compiled cases ({summary['tests_passed_rate']:.0%})")
     print(f"Tokens:   {summary['total_prompt_tokens']} prompt + "
           f"{summary['total_completion_tokens']} completion = "
           f"{summary['total_tokens']} total")
     print(f"Throughput: {summary['avg_tokens_per_second']:.1f} completion tok/s (avg)")
     print(f"Avg model latency: {summary['avg_execution_time']:.2f}s per case")
     print(f"Total model time: {summary['total_execution_time']:.2f}s, "
-          f"total compile time: {summary['total_compile_time']:.2f}s")
+          f"total compile time: {summary['total_compile_time']:.2f}s, "
+          f"total test time: {summary['total_test_time']:.2f}s")
     print(f"Wall-clock run time: {summary['wall_time']:.2f}s")
 
 

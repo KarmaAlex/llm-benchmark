@@ -12,6 +12,14 @@ public class CustomerProfile {
         this.phoneNumber = null;
     }
 
+    public CustomerProfile() {
+    }
+
+    public CustomerProfile(String email, String phoneNumber) {
+        this.email = email;
+        this.phoneNumber = phoneNumber;
+    }
+
     public String getEmail() {
         return email;
     }
