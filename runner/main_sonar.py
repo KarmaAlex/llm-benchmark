@@ -3,8 +3,10 @@ import shutil
 from dataclasses import replace
 from pathlib import Path
 
+from runner.sonar_tests.analysis import analyze_case
 from runner.sonar_tests.compiler import Compiler
 from runner.sonar_tests.edit_pipeline import PROMPT_NAME_BY_EDIT_MODE, apply_model_response
+from runner.sonar_tests.sonar_server import SonarServer
 from runner.sonar_tests.test_runner import TestRunner
 from runner.sonar_tests.workspace import Workspace
 from runner.stats import tokens_per_second
@@ -46,6 +48,16 @@ parser.add_argument(
     choices=["cuda", "cpu"],
     default="cuda",
     help="Run local (llama.cpp) models on the GPU (default) or force CPU-only.",
+)
+parser.add_argument(
+    "--sonar",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "After compiling and testing, analyze the patched project with a real "
+        "SonarQube and report whether the issue is gone and what it cost "
+        "(default: on)."
+    ),
 )
 args = parser.parse_args()
 
@@ -155,3 +167,22 @@ if compilation.compiled:
     print(
         f"Test execution time: {test_execution.execution_time:.2f}s"
     )
+
+if compilation.compiled and args.sonar:
+    analysis = analyze_case(
+        args.case,
+        run_directory,
+        SonarServer.ensure_running(),
+        "single",
+    )
+
+    if not analysis["sonar_analyzed"]:
+        print(f"Sonar analysis skipped: {analysis['sonar_error']}")
+    else:
+        print(f"Issue resolved: {analysis['target_resolved']}")
+        for issue in analysis["remaining_target_issues"]:
+            print(f"  still there: {issue['rule']} line {issue['line']} - {issue['message']}")
+        print(f"New issues introduced: {analysis['new_issues_count']}")
+        for issue in analysis["new_issues"]:
+            print(f"  {issue['rule']} {issue['file']}:{issue['line']} - {issue['message']}")
+        print(f"Sonar analysis time: {analysis['sonar_time']:.2f}s")

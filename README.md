@@ -5,7 +5,7 @@ A framework for benchmarking commercial and open-source LLMs on software enginee
 Two benchmark suites are implemented:
 
 - **`markdown`** — structured data extraction from Markdown documents (headings, tables, checklists, and multi-document joins/correlations). Graded by exact JSON match against a reference answer.
-- **`sonar`** — fixing a flagged SonarQube static-analysis issue in a real Maven/Java project. Graded by whether the model's patch applies, the project still compiles, and its existing unit tests still pass.
+- **`sonar`** — fixing a flagged SonarQube static-analysis issue in a real Maven/Java project. Graded by whether the model's patch applies, the project still compiles, its existing unit tests still pass, and — against a real SonarQube server — whether the reported issue is actually gone and no new issues were introduced.
 
 Both suites share the same execution pipeline: **Benchmark Loader → Prompt Loader → Prompt Builder → Provider (OpenAI / llama.cpp) → Model Response → grading**. Adding a new benchmark case is data-only (drop files into `benchmark/<suite>/<case_id>/`); no loader code changes are needed since every non-JSON file in a case directory is automatically exposed to the prompt template as a `{{placeholder}}`.
 
@@ -16,7 +16,7 @@ benchmark/    Benchmark case data (read-only): benchmark/markdown/mdNNN/, benchm
 configs/      Per-model YAML configs (base + -markdown/-sonar task variants)
 prompts/      Versioned prompt templates (system_v1.md, markdown_v1.md, sonar_v1.md, ...)
 runner/       The execution engine (installable package) — loaders, providers, grading, CLI entry points
-scripts/      Standalone utility scripts (currently just a model smoke test)
+scripts/      Standalone utility scripts (SonarQube server control, fixture verification, model smoke test)
 tests/        pytest suite for the runner package
 results/      Timestamped output of each run_all_* invocation, one report.json per run and resulting project for sonar runs
 ```
@@ -36,7 +36,7 @@ pip install -e ".[dev]"   # + pytest, for running tests/
 
 **Local models** (`provider: llama.cpp` configs): place GGUF weight files under `models/` (gitignored) and point each config's `model:` field at the relative path. Inference goes through the `llama-cpp-python` bindings directly — no separate llama.cpp server process is required, though `llama-cpp-python` needs a working C/C++ toolchain (and CUDA, for GPU offload) to install.
 
-**Sonar benchmark only**: requires `mvn`/`./mvnw` and a JDK on `PATH` (used to compile/test patched projects), and the system `patch` utility (used for `--edit-mode diff`).
+**Sonar benchmark only**: requires `mvn`/`./mvnw` and a JDK on `PATH` (used to compile/test patched projects), and the system `patch` utility (used for `--edit-mode diff`). The SonarQube analysis phase additionally needs `podman` — it runs a containerized SonarQube on `localhost:9000` (see *Sonar analysis phase* below). Without podman, runs still complete; the sonar fields are recorded as skipped.
 
 ## Configuring models
 
@@ -83,10 +83,20 @@ All commands run as `python -m runner.<script>` from the repo root.
 |---|---|
 | `main_markdown <case> --config <name>` | Runs one markdown case, prints the rendered prompt, the model's response, and whether it matched. Exits non-zero on a mismatch. |
 | `run_all_markdown --config <name>` | Runs every case under `benchmark/markdown/`, writes `results/<timestamp>/report.json` plus a per-case summary table to stdout. |
-| `main_sonar <case> --config <name> --edit-mode {diff,structured,toolcall}` | Runs one sonar case end-to-end: generate → apply patch → compile → test. |
+| `main_sonar <case> --config <name> --edit-mode {diff,structured,toolcall}` | Runs one sonar case end-to-end: generate → apply patch → compile → test → SonarQube analysis (`--no-sonar` to skip), printing the remaining and newly introduced issues. |
 | `run_all_sonar --config <name> --edit-mode ...` | Runs every case under `benchmark/sonar/` through the full generate/apply/compile/test pipeline and writes `report.json`. |
 | `run_all_sonar_generate --config <name> --edit-mode ...` | Generate + apply only (no compile/test) for every sonar case — for running the model-inference phase on a machine without a JDK/Maven. Writes `report.json` with `"validated": false`. |
 | `validate_sonar_run <run_id>` | Re-runs compile + test for an already-generated run directory (from `run_all_sonar_generate`), without calling the model again, and updates that run's `report.json` in place (`"validated": true`). |
+| `analyze_sonar_run <run_id> [--cases ...]` | Runs the SonarQube analysis phase for an already-generated *and* compiled run directory, without calling the model again, and updates that run's `report.json` in place (`"sonar_analyzed": true`). |
+
+`run_all_sonar` performs the analysis phase inline by default; pass `--no-sonar` to skip it and run `analyze_sonar_run` later instead.
+
+Two standalone scripts run as `python -m scripts.<script>`:
+
+| Script | What it does |
+|---|---|
+| `sonar_server {start,status,stop,reset}` | Manual control of the shared SonarQube container. `reset` deletes the container, its volumes and the stored credentials. |
+| `verify_sonar_issues [--cases ...] [--refresh]` | Checks the *fixtures*: that the issue each `benchmark/sonar/<ID>/issue.json` claims is really what SonarQube reports (same rule, same file, same line). Reads the cached baselines, so it's near-instant once they're warm. |
 
 New benchmark cases (new `mdNNN/` or `<RULE_ID>/` directories under `benchmark/`) are picked up automatically by the `run_all_*` scripts — there's no manifest or registration step.
 
@@ -99,8 +109,20 @@ New benchmark cases (new `mdNNN/` or `<RULE_ID>/` directories under `benchmark/`
 1. **Apply** — the model's edit is turned into file changes: a unified diff via the system `patch` command (`--edit-mode diff`), or exact/fuzzy text-block replacement (`--edit-mode structured`/`toolcall`).
 2. **Compile** — `mvn compile` (or `./mvnw compile`) against the patched project.
 3. **Test** — if compilation succeeds, `mvn test` is run and its Surefire summary line is parsed for pass/fail counts.
+4. **Analyze** — if compilation succeeded, the patched project is scanned by a real SonarQube server and the findings are diffed against the pristine project's findings (see below).
 
-A case "passes" if the patch applies, the project compiles, and every existing unit test still passes — this checks for regression safety, not whether the model's fix matches any particular reference solution.
+The headline metric is `clean_fix`: the reported issue is gone, no new issue was introduced, and every existing unit test still passes. The weaker signals (`applied`, `compiled`, `tests_passed`, `target_resolved`) are all kept separately.
+
+### Sonar analysis phase
+
+The analysis runs against a containerized SonarQube on `localhost:9000`, started on demand and **deliberately left running between invocations** — booting it costs 1–2 minutes, and replicability work means running the benchmark many times. Its database lives on podman volumes, so a restart reuses both the data and the admin token (cached in a temporary file in the root of the project). Use `python -m scripts.sonar_server {stop, start, status}` to control it manually.
+
+Two comparisons are made per case:
+
+- **Issue resolved?** No finding of the case's rule remains anywhere in the case's file. Deliberately not line-based: any patch shifts line numbers.
+- **New issues?** Post-fix findings are compared against the pristine project's findings as a multiset keyed on `(rule, file, message)`. Anything above the baseline count is new — so a rule that fired twice before and twice after is not a regression, but twice before and three times after is.
+
+The baseline side of that comparison is a pure function of the fixture and the analyzer version, so it's computed once and cached under `.cache/sonar-baselines/` (keyed by a hash of the fixture's sources, so editing a case invalidates it automatically). Scanner invocations share one Maven repository under `.cache/maven-repo/` and run offline once it's warm. Together these keep a repeat analysis to a few seconds per case instead of tens of seconds.
 
 ## Metrics extracted per run
 
@@ -108,4 +130,4 @@ Every `run_all_*` invocation writes `results/<timestamp>/report.json` with `{"co
 
 **Markdown** — per case: `matched` (bool), `execution_time`, `prompt_tokens`, `completion_tokens`, `tokens_per_second`, `finish_reason`, `parse_error`/`error`, the raw `response_text` and `parsed_output`. Aggregate summary adds: `matched_rate`, total/average token counts and throughput, `total_execution_time`/`wall_time`, and a `by_difficulty` breakdown (matched/total per difficulty level).
 
-**Sonar** — per case: `applied`, `compiled`, `tests_ran`, `tests_passed`, `tests_run_count`/`tests_failed`/`tests_errored`, `execution_time`, `compile_time`, `test_time`, token counts, `tokens_per_second`, plus the generated `response_text`/`diff`. Aggregate summary adds: `applied_rate`, `compiled_rate`, and `tests_passed_rate` (computed over compiled cases only, since a case that fails to compile can't run tests), plus the same token/timing totals as markdown. `run_all_sonar_generate` writes a reduced summary (token/throughput/applied stats only, no compile/test fields) until `validate_sonar_run` fills the rest in.
+**Sonar** — per case: `applied`, `compiled`, `tests_ran`, `tests_passed`, `tests_run_count`/`tests_failed`/`tests_errored`, `execution_time`, `compile_time`, `test_time`, token counts, `tokens_per_second`, plus the generated `response_text`/`diff`. From the analysis phase: `sonar_analyzed`, `target_resolved`, `new_issues_count`, `new_issues` (full detail per finding), `remaining_target_issues`, `baseline_issue_count`/`after_issue_count`, `sonar_time`, and `sonar_error` (why a case was skipped, e.g. it never compiled). Aggregate summary adds: `applied_rate`, `compiled_rate`, `tests_passed_rate` (computed over compiled cases only, since a case that fails to compile can't run tests), `resolved_rate` (over analyzed cases, for the same reason), `clean_fix_rate` (over all cases — this is the headline number), `new_issues_total`, plus the same token/timing totals as markdown. `run_all_sonar_generate` writes a reduced summary (token/throughput/applied stats only, no compile/test fields) until `validate_sonar_run` fills the rest in.

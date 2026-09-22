@@ -5,3 +5,5 @@ __pycache__
 target/
 results/test/
 .pytest_cache
+.sonar-server.json
+.cache/
