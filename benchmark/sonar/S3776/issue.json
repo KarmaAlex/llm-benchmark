@@ -2,6 +2,5 @@
     "rule": "java:S3776",
     "file": "src/main/java/com/benchmark/order/OrderValidator.java",
     "line": 7,
-    "message": "Refactor this method to reduce its Cognitive Complexity from 15 to the 15 allowed.",
-    "description": "\"isValid\" combines a loop with four levels of nested \"if\"/\"else\" branching, each adding to the method's Cognitive Complexity. It should be refactored, e.g. by using early \"continue\"/guard clauses and extracting the per-item validation logic into a separate method, so the control flow is flatter and easier to follow."
+    "message": "Refactor this method to reduce its Cognitive Complexity from 28 to the 15 allowed."
 }

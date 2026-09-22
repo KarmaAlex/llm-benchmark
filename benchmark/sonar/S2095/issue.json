@@ -2,6 +2,5 @@
     "rule": "java:S2095",
     "file": "src/main/java/com/benchmark/loganalyzer/LogAnalyzer.java",
     "line": 9,
-    "message": "Use try-with-resources or close this \"LogFileReader\" in a \"finally\" clause.",
-    "description": "\"LogFileReader\" implements \"AutoCloseable\" (see LogFileReader.java) and wraps an open \"BufferedReader\"/file handle, but the instance created on this line is never closed, leaking the underlying file resource every time this method runs."
+    "message": "Use try-with-resources or close this \"LogFileReader\" in a \"finally\" clause."
 }

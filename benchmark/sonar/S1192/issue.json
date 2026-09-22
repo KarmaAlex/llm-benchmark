@@ -1,7 +1,6 @@
 {
     "rule": "java:S1192",
     "file": "src/main/java/com/benchmark/notification/NotificationService.java",
-    "line": 13,
-    "message": "Define a constant instead of duplicating this literal \"Thank you for your order, \" 3 times.",
-    "description": "The string literal \"Thank you for your order, \" is repeated identically on lines 6, 10, and 14. It should be extracted into a single named constant so future changes only need to happen in one place."
+    "line": 6,
+    "message": "Define a constant instead of duplicating this literal \"Thank you for your order, \" 3 times."
 }

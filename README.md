@@ -1,396 +1,111 @@
-# LLM Sonar Benchmark
+# LLM Benchmark
 
-A modular benchmarking framework for evaluating the performance of commercial and open-source Large Language Models (LLMs) on software engineering tasks.
+A framework for benchmarking commercial and open-source LLMs on software engineering tasks, built for comparing model effectiveness on automated software development work.
 
-The project is being developed as part of a master's thesis comparing the effectiveness of different LLMs on automated software development tasks such as static analysis issue resolution and software engineering document understanding.
+Two benchmark suites are implemented:
 
----
+- **`markdown`** — structured data extraction from Markdown documents (headings, tables, checklists, and multi-document joins/correlations). Graded by exact JSON match against a reference answer.
+- **`sonar`** — fixing a flagged SonarQube static-analysis issue in a real Maven/Java project. Graded by whether the model's patch applies, the project still compiles, and its existing unit tests still pass.
 
-# Objectives
+Both suites share the same execution pipeline: **Benchmark Loader → Prompt Loader → Prompt Builder → Provider (OpenAI / llama.cpp) → Model Response → grading**. Adding a new benchmark case is data-only (drop files into `benchmark/<suite>/<case_id>/`); no loader code changes are needed since every non-JSON file in a case directory is automatically exposed to the prompt template as a `{{placeholder}}`.
 
-The benchmark aims to:
-
-* Evaluate multiple LLMs using identical benchmark tasks.
-* Support both local and cloud-hosted models through a common provider interface.
-* Separate benchmark execution from evaluation and statistical analysis.
-* Produce fully reproducible experiments.
-* Generate objective metrics suitable for academic comparison.
-
-The framework is intentionally model-agnostic and benchmark-agnostic, allowing new benchmark suites and providers to be added without modifying the core execution pipeline.
-
----
-
-# Project Structure
+## Project structure
 
 ```
-benchmark/
-    Benchmark definitions (read-only)
-
-configs/
-    Model configuration files
-
-prompts/
-    Versioned benchmark prompts
-
-runner/
-    Benchmark execution engine
-
-evaluators/
-    Automatic metric computation
-
-analysis/
-    Statistical analysis and plotting
-
-results/
-    Raw experiment outputs
+benchmark/    Benchmark case data (read-only): benchmark/markdown/mdNNN/, benchmark/sonar/<RULE_ID>/
+configs/      Per-model YAML configs (base + -markdown/-sonar task variants)
+prompts/      Versioned prompt templates (system_v1.md, markdown_v1.md, sonar_v1.md, ...)
+runner/       The execution engine (installable package) — loaders, providers, grading, CLI entry points
+scripts/      Standalone utility scripts (currently just a model smoke test)
+tests/        pytest suite for the runner package
+results/      Timestamped output of each run_all_* invocation, one report.json per run and resulting project for sonar runs
 ```
 
----
+## Environment setup
 
-# Current Architecture
+Requires Python ≥ 3.11.
 
-The benchmark follows the pipeline below:
-
-```
-Benchmark Case
-        │
-        ▼
-Benchmark Loader
-        │
-        ▼
-Prompt Loader
-        │
-        ▼
-Prompt Builder
-        │
-        ▼
-Provider
-(OpenAI / llama.cpp / ...)
-        │
-        ▼
-Model Response
-        │
-        ▼
-Results
+```bash
+pip install -e .          # core deps: openai, llama-cpp-python, PyYAML, python-dotenv
+pip install -e ".[dev]"   # + pytest, for running tests/
 ```
 
-The execution layer is intentionally separated from evaluation so that benchmark outputs can be re-evaluated without rerunning expensive model inference.
+**Important** installing llama-cpp-python requires nvcc to use cuda devices, this also requires setting the CMAKE_ARGS="-DGGML_CUDA=on" environment variable before installing it
 
----
+**API-based models** (`provider: openai` configs, e.g. `gpt5-markdown.yaml`): copy `.env.example` to `.env` and set `OPENAI_API_KEY`. it's loaded automatically on `import runner`, so no per-script setup is needed. An explicit `OPENAI_API_KEY=... python -m ...` in the shell still overrides the file.
 
-# Current Features
+**Local models** (`provider: llama.cpp` configs): place GGUF weight files under `models/` (gitignored) and point each config's `model:` field at the relative path. Inference goes through the `llama-cpp-python` bindings directly — no separate llama.cpp server process is required, though `llama-cpp-python` needs a working C/C++ toolchain (and CUDA, for GPU offload) to install.
 
-## Benchmark Loading
+**Sonar benchmark only**: requires `mvn`/`./mvnw` and a JDK on `PATH` (used to compile/test patched projects), and the system `patch` utility (used for `--edit-mode diff`).
 
-Benchmark cases are loaded dynamically.
+## Configuring models
 
-Each benchmark directory may contain arbitrary resource files.
+Each `configs/<name>.yaml` maps 1:1 to a `ModelConfig` and is loaded with `ConfigLoader.load("<name>")` (no `.yaml` suffix, no path). Task-specific variants (e.g. `qwen2.5-coder-3b-q4-markdown.yaml` vs `-sonar.yaml`) let token budgets and sampling differ per task without touching the underlying model definition.
 
-Example:
-
-```
-benchmark/
-    markdown/
-        md001/
-            metadata.json
-            document.md
-            task.md
-```
-
-Every resource file automatically becomes available to prompt templates through placeholders.
-
-Example:
-
-```
-{{document}}
-
-{{task}}
-```
-
-No benchmark-specific loading logic is required.
-
----
-
-## Prompt System
-
-Prompts are versioned to ensure reproducibility.
-
-```
-prompts/
-
-    system.md
-
-    sonar_v1.md
-
-    markdown_v1.md
-```
-
-The PromptBuilder performs placeholder substitution automatically.
-
-For example,
-
-```
-{{rule}}
-
-{{issue}}
-
-{{document}}
-
-{{task}}
-```
-
-are replaced using the benchmark resources.
-
-Any unresolved placeholders produce an error.
-
----
-
-## Model Configuration
-
-Each model has its own configuration file.
-
-Example:
+Local llama.cpp example:
 
 ```yaml
-name: GPT-5
-
-provider: openai
-
-model: gpt-5
-
+name: Qwen2.5-Coder-3B-Q4
+provider: llama.cpp
+model: models/qwen2.5-coder-3b-instruct-q4_k_m.gguf
 temperature: 0
-
 max_tokens: 4096
-
-context: 128000
-
-parameters: {}
+context: 32768
+parameters:
+  n_gpu_layers: -1
+  n_threads: 8
+sampling:
+  repeat_penalty: 1.0
 ```
 
-The execution engine is unaware of individual models and interacts only with these configuration files.
+OpenAI example:
 
----
-
-## Provider Interface
-
-Every provider implements the same interface.
-
-```
-ChatPrompt
-        │
-        ▼
-generate(...)
-        │
-        ▼
-ModelResponse
+```yaml
+name: GPT-5 (markdown)
+provider: openai
+model: gpt-5
+temperature: 1
+max_tokens: 8192
+context: 400000
+parameters:
+  max_tokens_param: max_completion_tokens
+  supports_temperature: false
+supports_tools: true
 ```
 
-Currently implemented:
+Every CLI entry point below also takes `--device {cuda,cpu}` (default `cuda`). It's a no-op for `openai` configs; for `llama.cpp` configs, `cpu` forces `n_gpu_layers: 0` for that run only, without editing the YAML file.
 
-* OpenAI
-* llama.cpp
+## Running the runner scripts
 
-This allows local GGUF models and hosted APIs to be benchmarked identically.
+All commands run as `python -m runner.<script>` from the repo root.
 
----
+| Script | What it does |
+|---|---|
+| `main_markdown <case> --config <name>` | Runs one markdown case, prints the rendered prompt, the model's response, and whether it matched. Exits non-zero on a mismatch. |
+| `run_all_markdown --config <name>` | Runs every case under `benchmark/markdown/`, writes `results/<timestamp>/report.json` plus a per-case summary table to stdout. |
+| `main_sonar <case> --config <name> --edit-mode {diff,structured,toolcall}` | Runs one sonar case end-to-end: generate → apply patch → compile → test. |
+| `run_all_sonar --config <name> --edit-mode ...` | Runs every case under `benchmark/sonar/` through the full generate/apply/compile/test pipeline and writes `report.json`. |
+| `run_all_sonar_generate --config <name> --edit-mode ...` | Generate + apply only (no compile/test) for every sonar case — for running the model-inference phase on a machine without a JDK/Maven. Writes `report.json` with `"validated": false`. |
+| `validate_sonar_run <run_id>` | Re-runs compile + test for an already-generated run directory (from `run_all_sonar_generate`), without calling the model again, and updates that run's `report.json` in place (`"validated": true`). |
 
-## Current Output
+New benchmark cases (new `mdNNN/` or `<RULE_ID>/` directories under `benchmark/`) are picked up automatically by the `run_all_*` scripts — there's no manifest or registration step.
 
-A benchmark execution currently produces:
+## How outputs are validated
 
-* Rendered prompt
-* Raw model response
-* Basic inference metrics
+**Markdown**: the model's response is extracted as JSON (`JsonExtractor`, tolerant of ` ```json ` code fences) and compared against each case's `expected.json` with strict structural equality (`JsonComparator`) — every key, value, type, and array order must match exactly. There is no partial credit or fuzzy matching.
 
-Example metrics:
+**Sonar**: there's no reference patch to diff against. Instead, grading is a pass/fail pipeline run against an isolated copy of the case's Maven project (the original under `benchmark/sonar/<ID>/project/` is never mutated):
 
-```json
-{
-    "latency": 2.81,
-    "prompt_tokens": 517,
-    "completion_tokens": 183,
-    "finish_reason": "stop"
-}
-```
+1. **Apply** — the model's edit is turned into file changes: a unified diff via the system `patch` command (`--edit-mode diff`), or exact/fuzzy text-block replacement (`--edit-mode structured`/`toolcall`).
+2. **Compile** — `mvn compile` (or `./mvnw compile`) against the patched project.
+3. **Test** — if compilation succeeds, `mvn test` is run and its Surefire summary line is parsed for pass/fail counts.
 
----
+A case "passes" if the patch applies, the project compiles, and every existing unit test still passes — this checks for regression safety, not whether the model's fix matches any particular reference solution.
 
-# Implemented Components
+## Metrics extracted per run
 
-* Project structure
-* Filesystem utilities
-* Benchmark loader
-* Prompt loader
-* Configuration loader
-* Prompt builder
-* Provider interface
-* OpenAI provider
-* llama.cpp provider
-* Provider factory
-* Common data models
-* Initial benchmark prompts
-* Example Markdown benchmark
+Every `run_all_*` invocation writes `results/<timestamp>/report.json` with `{"config": ..., "summary": {...}, "cases": [...]}` — per-case detail plus an aggregate summary.
 
-The current implementation is capable of executing complete inference runs against both local and remote models.
+**Markdown** — per case: `matched` (bool), `execution_time`, `prompt_tokens`, `completion_tokens`, `tokens_per_second`, `finish_reason`, `parse_error`/`error`, the raw `response_text` and `parsed_output`. Aggregate summary adds: `matched_rate`, total/average token counts and throughput, `total_execution_time`/`wall_time`, and a `by_difficulty` breakdown (matched/total per difficulty level).
 
----
-
-# Planned Components
-
-## Runner
-
-Implement the experiment runner responsible for:
-
-```
-Load benchmark
-        │
-Build prompt
-        │
-Run provider
-        │
-Store raw response
-```
-
-Later versions will additionally perform:
-
-```
-Apply patch
-
-Compile project
-
-Execute tests
-
-Run SonarQube
-
-Store execution logs
-```
-
----
-
-## Patch Executor
-
-Apply unified diffs returned by models to temporary project copies.
-
-Responsibilities:
-
-* Apply patches safely
-* Detect patch failures
-* Preserve original benchmark cases
-
----
-
-## Build Executor
-
-Execute project compilation.
-
-Initially:
-
-* Maven
-* Gradle
-
-Outputs:
-
-* Compilation success
-* Build logs
-* Execution time
-
----
-
-## Test Executor
-
-Execute project test suites after patch application.
-
-Metrics include:
-
-* Test success
-* Number of regressions
-* Execution time
-
----
-
-## Sonar Evaluator
-
-Execute SonarQube analysis before and after applying a patch.
-
-Automatically determine:
-
-* Issue removed
-* New issues introduced
-* Remaining issues
-
----
-
-## Metrics Evaluators
-
-Generate benchmark-independent metrics such as:
-
-* Patch applied
-* Compilation success
-* Test success
-* Execution time
-* Files changed
-* Lines changed
-* Token usage
-
-Each execution produces a `metrics.json` file independent of the raw model output.
-
----
-
-## Analysis Module
-
-Aggregate all benchmark executions into a single dataset.
-
-Generate:
-
-* CSV exports
-* LaTeX tables
-* Statistical summaries
-* Publication-quality figures
-
-Planned visualizations include:
-
-* Overall benchmark accuracy
-* Success rate by benchmark category
-* Compilation failures
-* Token usage
-* Latency distributions
-* Cost per successful benchmark
-* Success versus benchmark difficulty
-
----
-
-# Reproducibility
-
-Each experiment will be assigned a unique run identifier.
-
-Every run will record:
-
-* Benchmark version
-* Prompt version
-* Model configuration
-* Temperature
-* Random seed (where supported)
-* Git commit
-* Timestamp
-
-This ensures that all experiments can be reproduced exactly.
-
----
-
-# Current Status
-
-The framework has reached the first functional milestone.
-
-An end-to-end execution is now possible:
-
-```
-Benchmark
-    ↓
-Prompt
-    ↓
-Model
-    ↓
-Response
-```
-
-The next development milestone is implementing the experiment runner, result writer, and execution pipeline for patch application, compilation, testing, and automatic evaluation.
+**Sonar** — per case: `applied`, `compiled`, `tests_ran`, `tests_passed`, `tests_run_count`/`tests_failed`/`tests_errored`, `execution_time`, `compile_time`, `test_time`, token counts, `tokens_per_second`, plus the generated `response_text`/`diff`. Aggregate summary adds: `applied_rate`, `compiled_rate`, and `tests_passed_rate` (computed over compiled cases only, since a case that fails to compile can't run tests), plus the same token/timing totals as markdown. `run_all_sonar_generate` writes a reduced summary (token/throughput/applied stats only, no compile/test fields) until `validate_sonar_run` fills the rest in.

@@ -2,7 +2,6 @@
     "id": "S2637_01",
     "rule": "java:S2637",
     "files": [
-        "src/main/java/com/benchmark/customer/NonNull.java",
         "src/main/java/com/benchmark/customer/CustomerProfile.java",
         "pom.xml"
     ]

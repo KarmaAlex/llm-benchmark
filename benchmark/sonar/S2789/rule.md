@@ -1,6 +1,6 @@
-# SonarQube Rule: java:S2789
+# SonarQube Rule: java:S3655
 
-## "Optional" value should only be accessed after confirming it contains a value
+## Optional value should only be accessed after calling isPresent()
 
 Calling `.get()` on an `Optional` without checking `isPresent()` (or using a safer
 accessor) defeats the entire purpose of `Optional`: it throws a `NoSuchElementException`

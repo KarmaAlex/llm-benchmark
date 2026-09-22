@@ -1,14 +1,15 @@
 package com.benchmark.customer;
 
+import javax.annotation.Nonnull;
+
 public class CustomerProfile {
 
-    @NonNull
+    @Nonnull
     private String email;
 
     private String phoneNumber;
 
     public void reset() {
-        this.email = null;
         this.phoneNumber = null;
     }
 

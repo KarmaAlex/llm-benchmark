@@ -2,6 +2,5 @@
     "rule": "java:S2583",
     "file": "src/main/java/com/benchmark/flags/FeatureFlagEvaluator.java",
     "line": 8,
-    "message": "Change this condition so that it does not always evaluate to \"false\".",
-    "description": "\"betaProgramEnabled\" is assigned the literal \"false\" on line 6 and never reassigned before being tested, so this condition is always false and the beta-program branch is unreachable dead code."
+    "message": "Change this condition so that it does not always evaluate to \"false\""
 }

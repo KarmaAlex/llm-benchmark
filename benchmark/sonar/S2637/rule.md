@@ -1,27 +1,36 @@
 # SonarQube Rule: java:S2637
 
-## "@NonNull" values should not be set to null
+## "@Nonnull" values should not be set to null
 
-A field, parameter, or return value marked with a "non-null" annotation is a contract:
-callers and readers are told it will never be null. Assigning `null` to such a value
-breaks that contract and defeats the purpose of the annotation.
+A field, parameter, or return value marked with a "non-null" annotation (such as
+`javax.annotation.Nonnull`) is a contract: callers and readers are told it will never
+be null. Leaving such a field uninitialized in a constructor, or explicitly assigning
+it `null`, breaks that contract and defeats the purpose of the annotation.
 
 For example:
 
 ```java
-@NonNull
+@Nonnull
 private String email;
 
-public void reset() {
-    this.email = null; // breaks the @NonNull contract
+public CustomerProfile() {
+    // email is never assigned here, so it stays null despite the @Nonnull contract
+}
+
+public CustomerProfile(String email) {
+    this.email = email;
 }
 ```
 
-should either avoid the null assignment (e.g. reset to a safe default) or the field
-should not be annotated `@NonNull` if it legitimately needs to hold null:
+should ensure every constructor establishes a non-null value for the field, e.g. by
+delegating to the constructor that requires one:
 
 ```java
-public void reset() {
-    this.email = "";
+public CustomerProfile() {
+    this("");
+}
+
+public CustomerProfile(String email) {
+    this.email = email;
 }
 ```

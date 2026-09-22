@@ -2,6 +2,5 @@
     "rule": "java:S1155",
     "file": "src/main/java/com/benchmark/cart/ShoppingCart.java",
     "line": 15,
-    "message": "Use \"isEmpty()\" to check whether the collection is empty or not.",
-    "description": "\"items.size() == 0\" is equivalent to but less readable and potentially less efficient than \"items.isEmpty()\", which should be used instead to test for emptiness."
+    "message": "Use isEmpty() to check whether the collection is empty or not."
 }

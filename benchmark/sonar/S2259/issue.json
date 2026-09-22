@@ -1,7 +1,6 @@
 {
     "rule": "java:S2259",
     "file": "src/main/java/com/benchmark/UserService.java",
-    "line": 14,
-    "message": "A \"NullPointerException\" could be thrown; \"user\" is nullable here.",
-    "description": "The variable \"user\" is dereferenced on line 14 before it is checked for null on line 16, so if a null value is passed in, a NullPointerException will be thrown before the existing null check ever runs."
+    "line": 18,
+    "message": "A \"NullPointerException\" could be thrown; \"user\" is nullable here."
 }

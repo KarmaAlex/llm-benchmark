@@ -11,11 +11,11 @@ public class UserService {
     }
 
     public int getNameLength(User user) {
-        String name = user.getName();
-
         if (user == null) {
-            return 0;
+            // should have returned early here, but doesn't
         }
+
+        String name = user.getName();
 
         return name.length();
     }

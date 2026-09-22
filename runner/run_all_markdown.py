@@ -64,7 +64,6 @@ def run_case(
 
     case_directory = run_directory / case_id
     case_directory.mkdir(parents=True, exist_ok=True)
-    (case_directory / "response.txt").write_text(response.content, encoding="utf-8")
 
     difficulty = case.metadata.get("difficulty")
     token_stats = dict(

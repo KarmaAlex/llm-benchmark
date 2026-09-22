@@ -1,7 +1,6 @@
 {
     "rule": "java:S1066",
     "file": "src/main/java/com/benchmark/access/AccessController.java",
-    "line": 6,
-    "message": "Merge this if statement with the enclosing one.",
-    "description": "This \"if\" statement is nested inside another \"if\" statement with no other logic in between and no \"else\" branch, so the two conditions can be merged with \"&&\" into a single statement without changing behavior."
+    "line": 7,
+    "message": "Merge this if statement with the enclosing one."
 }

@@ -1,7 +1,6 @@
 {
     "rule": "java:S2637",
     "file": "src/main/java/com/benchmark/customer/CustomerProfile.java",
-    "line": 11,
-    "message": "\"email\" is marked \"@NonNull\" but is set to null here.",
-    "description": "The field \"email\" is annotated \"@NonNull\" (declared in NonNull.java) but this line assigns it the literal \"null\", violating the field's own non-null contract and risking a NullPointerException for any caller of \"getEmail()\" that relies on it never being null."
+    "line": 16,
+    "message": "\"email\" is marked \"@Nonnull\" but is not initialized in this constructor."
 }

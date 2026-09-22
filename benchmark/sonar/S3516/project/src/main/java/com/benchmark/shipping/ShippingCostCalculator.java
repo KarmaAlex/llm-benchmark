@@ -3,14 +3,15 @@ package com.benchmark.shipping;
 public class ShippingCostCalculator {
 
     public double calculateCost(String shippingMethod, double weightKg) {
+        double rate = weightKg * 1.5;
         if (shippingMethod.equals("STANDARD")) {
-            return weightKg * 1.5;
+            return rate;
         } else if (shippingMethod.equals("EXPRESS")) {
-            return weightKg * 1.5;
+            return rate;
         } else if (shippingMethod.equals("OVERNIGHT")) {
-            return weightKg * 1.5;
+            return rate;
         }
 
-        return 0.0;
+        return rate;
     }
 }
