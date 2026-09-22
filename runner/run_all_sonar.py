@@ -113,16 +113,14 @@ def generate_case(
 
     case_directory = run_directory / case_id
     case_directory.mkdir(parents=True, exist_ok=True)
-    (case_directory / "response.txt").write_text(response.content, encoding="utf-8")
-
+    
     project_directory = Workspace.create(
         case.project_path,
         case_directory / "project",
     )
 
     outcome = apply_model_response(edit_mode, project_directory, response)
-    (case_directory / "patch.diff").write_text(outcome.diff or "", encoding="utf-8")
-
+    
     token_stats = dict(
         prompt_tokens=response.prompt_tokens,
         completion_tokens=response.completion_tokens,

@@ -1,0 +1,925 @@
+{
+  "config": "Qwen2.5-Coder-7B-Q4 (markdown)",
+  "summary": {
+    "total_cases": 20,
+    "matched_count": 17,
+    "matched_rate": 0.85,
+    "total_prompt_tokens": 13361,
+    "total_completion_tokens": 3809,
+    "total_tokens": 17170,
+    "avg_tokens_per_second": 14.769390258683089,
+    "avg_execution_time": 12.894912834199932,
+    "total_execution_time": 257.8982566839986,
+    "wall_time": 258.0511365099992,
+    "by_difficulty": {
+      "1": {
+        "total": 2,
+        "matched": 2
+      },
+      "2": {
+        "total": 2,
+        "matched": 2
+      },
+      "3": {
+        "total": 4,
+        "matched": 3
+      },
+      "4": {
+        "total": 4,
+        "matched": 4
+      },
+      "5": {
+        "total": 4,
+        "matched": 3
+      },
+      "6": {
+        "total": 2,
+        "matched": 1
+      },
+      "7": {
+        "total": 2,
+        "matched": 2
+      }
+    }
+  },
+  "cases": [
+    {
+      "case_id": "md001",
+      "difficulty": 1,
+      "matched": true,
+      "execution_time": 9.882033076999505,
+      "prompt_tokens": 345,
+      "completion_tokens": 101,
+      "total_tokens": 446,
+      "tokens_per_second": 10.22056890652169,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "```json\n[\n    {\n        \"level\": 1,\n        \"text\": \"LLM Benchmark\"\n    },\n    {\n        \"level\": 2,\n        \"text\": \"Overview\"\n    },\n    {\n        \"level\": 3,\n        \"text\": \"SonarQube\"\n    },\n    {\n        \"level\": 3,\n        \"text\": \"Markdown\"\n    },\n    {\n        \"level\": 2,\n        \"text\": \"Results\"\n    }\n]\n```",
+      "parsed_output": [
+        {
+          "level": 1,
+          "text": "LLM Benchmark"
+        },
+        {
+          "level": 2,
+          "text": "Overview"
+        },
+        {
+          "level": 3,
+          "text": "SonarQube"
+        },
+        {
+          "level": 3,
+          "text": "Markdown"
+        },
+        {
+          "level": 2,
+          "text": "Results"
+        }
+      ]
+    },
+    {
+      "case_id": "md002",
+      "difficulty": 1,
+      "matched": true,
+      "execution_time": 8.869016551998357,
+      "prompt_tokens": 517,
+      "completion_tokens": 135,
+      "total_tokens": 652,
+      "tokens_per_second": 15.221529828984472,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "```json\n[\n    {\n        \"text\": \"Finalize the retry-policy design doc\",\n        \"done\": true\n    },\n    {\n        \"text\": \"Add integration tests for the payment gateway timeout path\",\n        \"done\": false\n    },\n    {\n        \"text\": \"Update the on-call runbook with the new alert thresholds\",\n        \"done\": false\n    },\n    {\n        \"text\": \"Schedule a design review with the fraud team\",\n        \"done\": true\n    },\n    {\n        \"text\": \"Migrate the feature flag from LaunchDarkly to the internal flag service\",\n        \"done\": false\n    }\n]\n```",
+      "parsed_output": [
+        {
+          "text": "Finalize the retry-policy design doc",
+          "done": true
+        },
+        {
+          "text": "Add integration tests for the payment gateway timeout path",
+          "done": false
+        },
+        {
+          "text": "Update the on-call runbook with the new alert thresholds",
+          "done": false
+        },
+        {
+          "text": "Schedule a design review with the fraud team",
+          "done": true
+        },
+        {
+          "text": "Migrate the feature flag from LaunchDarkly to the internal flag service",
+          "done": false
+        }
+      ]
+    },
+    {
+      "case_id": "md003",
+      "difficulty": 2,
+      "matched": true,
+      "execution_time": 5.635020154997619,
+      "prompt_tokens": 604,
+      "completion_tokens": 78,
+      "total_tokens": 682,
+      "tokens_per_second": 13.842009053121648,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "{\n    \"document_id\": \"PC-2026-0091\",\n    \"owner\": \"Marcus Webb\",\n    \"sponsor\": \"VP Engineering\",\n    \"status\": \"Approved\",\n    \"start_date\": \"2026-03-02\",\n    \"target_end_date\": \"2026-08-28\"\n}",
+      "parsed_output": {
+        "document_id": "PC-2026-0091",
+        "owner": "Marcus Webb",
+        "sponsor": "VP Engineering",
+        "status": "Approved",
+        "start_date": "2026-03-02",
+        "target_end_date": "2026-08-28"
+      }
+    },
+    {
+      "case_id": "md004",
+      "difficulty": 2,
+      "matched": true,
+      "execution_time": 8.220858287000738,
+      "prompt_tokens": 509,
+      "completion_tokens": 126,
+      "total_tokens": 635,
+      "tokens_per_second": 15.3268668065034,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "```json\n[\n    {\n        \"text\": \"Identity Provider Setup Guide\",\n        \"url\": \"https://wiki.internal.example.com/idp-setup\"\n    },\n    {\n        \"text\": \"Access Group Management\",\n        \"url\": \"https://wiki.internal.example.com/access-groups\"\n    },\n    {\n        \"text\": \"SSO Troubleshooting Runbook\",\n        \"url\": \"https://runbooks.internal.example.com/sso-troubleshooting\"\n    },\n    {\n        \"text\": \"Portal Architecture Overview\",\n        \"url\": \"https://wiki.internal.example.com/portal-architecture\"\n    }\n]\n```",
+      "parsed_output": [
+        {
+          "text": "Identity Provider Setup Guide",
+          "url": "https://wiki.internal.example.com/idp-setup"
+        },
+        {
+          "text": "Access Group Management",
+          "url": "https://wiki.internal.example.com/access-groups"
+        },
+        {
+          "text": "SSO Troubleshooting Runbook",
+          "url": "https://runbooks.internal.example.com/sso-troubleshooting"
+        },
+        {
+          "text": "Portal Architecture Overview",
+          "url": "https://wiki.internal.example.com/portal-architecture"
+        }
+      ]
+    },
+    {
+      "case_id": "md005",
+      "difficulty": 3,
+      "matched": false,
+      "execution_time": 13.450200838000455,
+      "prompt_tokens": 537,
+      "completion_tokens": 209,
+      "total_tokens": 746,
+      "tokens_per_second": 15.538801428861825,
+      "finish_reason": "stop",
+      "error": "Output does not match the expected result.\n\nExpected:\n[\n  {\n    \"department\": \"Engineering\",\n    \"headcount\": 142,\n    \"open_requisitions\": 12,\n    \"attrition_rate\": \"4.2%\"\n  },\n  {\n    \"department\": \"Sales\",\n    \"headcount\": 68,\n    \"open_requisitions\": 5,\n    \"attrition_rate\": \"6.1%\"\n  },\n  {\n    \"department\": \"Customer Support\",\n    \"headcount\": 51,\n    \"open_requisitions\": 3,\n    \"attrition_rate\": \"8.5%\"\n  },\n  {\n    \"department\": \"Product\",\n    \"headcount\": 24,\n    \"open_requisitions\": 2,\n    \"attrition_rate\": \"2.0%\"\n  },\n  {\n    \"department\": \"Finance\",\n    \"headcount\": 19,\n    \"open_requisitions\": 1,\n    \"attrition_rate\": \"1.5%\"\n  }\n]\n\nActual:\n[\n  {\n    \"department\": \"engineering\",\n    \"headcount\": 142,\n    \"open_requisitions\": 12,\n    \"attrition_rate\": \"4.2%\"\n  },\n  {\n    \"department\": \"sales\",\n    \"headcount\": 68,\n    \"open_requisitions\": 5,\n    \"attrition_rate\": \"6.1%\"\n  },\n  {\n    \"department\": \"customer_support\",\n    \"headcount\": 51,\n    \"open_requisitions\": 3,\n    \"attrition_rate\": \"8.5%\"\n  },\n  {\n    \"department\": \"product\",\n    \"headcount\": 24,\n    \"open_requisitions\": 2,\n    \"attrition_rate\": \"2.0%\"\n  },\n  {\n    \"department\": \"finance\",\n    \"headcount\": 19,\n    \"open_requisitions\": 1,\n    \"attrition_rate\": \"1.5%\"\n  }\n]",
+      "response_text": "```json\n[\n    {\n        \"department\": \"engineering\",\n        \"headcount\": 142,\n        \"open_requisitions\": 12,\n        \"attrition_rate\": \"4.2%\"\n    },\n    {\n        \"department\": \"sales\",\n        \"headcount\": 68,\n        \"open_requisitions\": 5,\n        \"attrition_rate\": \"6.1%\"\n    },\n    {\n        \"department\": \"customer_support\",\n        \"headcount\": 51,\n        \"open_requisitions\": 3,\n        \"attrition_rate\": \"8.5%\"\n    },\n    {\n        \"department\": \"product\",\n        \"headcount\": 24,\n        \"open_requisitions\": 2,\n        \"attrition_rate\": \"2.0%\"\n    },\n    {\n        \"department\": \"finance\",\n        \"headcount\": 19,\n        \"open_requisitions\": 1,\n        \"attrition_rate\": \"1.5%\"\n    }\n]\n```",
+      "parsed_output": [
+        {
+          "department": "engineering",
+          "headcount": 142,
+          "open_requisitions": 12,
+          "attrition_rate": "4.2%"
+        },
+        {
+          "department": "sales",
+          "headcount": 68,
+          "open_requisitions": 5,
+          "attrition_rate": "6.1%"
+        },
+        {
+          "department": "customer_support",
+          "headcount": 51,
+          "open_requisitions": 3,
+          "attrition_rate": "8.5%"
+        },
+        {
+          "department": "product",
+          "headcount": 24,
+          "open_requisitions": 2,
+          "attrition_rate": "2.0%"
+        },
+        {
+          "department": "finance",
+          "headcount": 19,
+          "open_requisitions": 1,
+          "attrition_rate": "1.5%"
+        }
+      ]
+    },
+    {
+      "case_id": "md006",
+      "difficulty": 3,
+      "matched": true,
+      "execution_time": 7.465794111001742,
+      "prompt_tokens": 590,
+      "completion_tokens": 109,
+      "total_tokens": 699,
+      "tokens_per_second": 14.599920434368187,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "```json\n[\n    {\n        \"language\": \"promql\",\n        \"code\": \"histogram_quantile(0.99, sum(rate(payment_service_request_duration_seconds_bucket[5m])) by (le))\"\n    },\n    {\n        \"language\": \"bash\",\n        \"code\": \"curl -s https://status.internal.example.com/api/services/card-processor | jq .status\"\n    },\n    {\n        \"language\": null,\n        \"code\": \"kubectl rollout restart deployment/payment-service -n payments\"\n    }\n]\n```",
+      "parsed_output": [
+        {
+          "language": "promql",
+          "code": "histogram_quantile(0.99, sum(rate(payment_service_request_duration_seconds_bucket[5m])) by (le))"
+        },
+        {
+          "language": "bash",
+          "code": "curl -s https://status.internal.example.com/api/services/card-processor | jq .status"
+        },
+        {
+          "language": null,
+          "code": "kubectl rollout restart deployment/payment-service -n payments"
+        }
+      ]
+    },
+    {
+      "case_id": "md007",
+      "difficulty": 4,
+      "matched": true,
+      "execution_time": 28.21486498000013,
+      "prompt_tokens": 558,
+      "completion_tokens": 443,
+      "total_tokens": 1001,
+      "tokens_per_second": 15.700943467708132,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "```json\n[\n    {\n        \"level\": 1,\n        \"text\": \"Employee Handbook\",\n        \"children\": [\n            {\n                \"level\": 2,\n                \"text\": \"Getting Started\",\n                \"children\": [\n                    {\n                        \"level\": 3,\n                        \"text\": \"Your First Week\",\n                        \"children\": []\n                    },\n                    {\n                        \"level\": 3,\n                        \"text\": \"Setting Up Your Workstation\",\n                        \"children\": []\n                    }\n                ]\n            },\n            {\n                \"level\": 2,\n                \"text\": \"Compensation and Benefits\",\n                \"children\": [\n                    {\n                        \"level\": 3,\n                        \"text\": \"Payroll Schedule\",\n                        \"children\": []\n                    },\n                    {\n                        \"level\": 3,\n                        \"text\": \"Health Insurance\",\n                        \"children\": [\n                            {\n                                \"level\": 4,\n                                \"text\": \"Enrollment Deadlines\",\n                                \"children\": []\n                            },\n                            {\n                                \"level\": 4,\n                                \"text\": \"Dependent Coverage\",\n                                \"children\": []\n                            }\n                        ]\n                    },\n                    {\n                        \"level\": 3,\n                        \"text\": \"Retirement Plan\",\n                        \"children\": []\n                    }\n                ]\n            },\n            {\n                \"level\": 2,\n                \"text\": \"Time Off\",\n                \"children\": [\n                    {\n                        \"level\": 3,\n                        \"text\": \"Vacation Policy\",\n                        \"children\": []\n                    },\n                    {\n                        \"level\": 3,\n                        \"text\": \"Sick Leave\",\n                        \"children\": []\n                    },\n                    {\n                        \"level\": 3,\n                        \"text\": \"Parental Leave\",\n                        \"children\": []\n                    }\n                ]\n            },\n            {\n                \"level\": 2,\n                \"text\": \"Workplace Conduct\",\n                \"children\": [\n                    {\n                        \"level\": 3,\n                        \"text\": \"Code of Conduct\",\n                        \"children\": []\n                    },\n                    {\n                        \"level\": 3,\n                        \"text\": \"Reporting Concerns\",\n                        \"children\": []\n                    }\n                ]\n            }\n        ]\n    }\n]\n```",
+      "parsed_output": [
+        {
+          "level": 1,
+          "text": "Employee Handbook",
+          "children": [
+            {
+              "level": 2,
+              "text": "Getting Started",
+              "children": [
+                {
+                  "level": 3,
+                  "text": "Your First Week",
+                  "children": []
+                },
+                {
+                  "level": 3,
+                  "text": "Setting Up Your Workstation",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "level": 2,
+              "text": "Compensation and Benefits",
+              "children": [
+                {
+                  "level": 3,
+                  "text": "Payroll Schedule",
+                  "children": []
+                },
+                {
+                  "level": 3,
+                  "text": "Health Insurance",
+                  "children": [
+                    {
+                      "level": 4,
+                      "text": "Enrollment Deadlines",
+                      "children": []
+                    },
+                    {
+                      "level": 4,
+                      "text": "Dependent Coverage",
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "level": 3,
+                  "text": "Retirement Plan",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "level": 2,
+              "text": "Time Off",
+              "children": [
+                {
+                  "level": 3,
+                  "text": "Vacation Policy",
+                  "children": []
+                },
+                {
+                  "level": 3,
+                  "text": "Sick Leave",
+                  "children": []
+                },
+                {
+                  "level": 3,
+                  "text": "Parental Leave",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "level": 2,
+              "text": "Workplace Conduct",
+              "children": [
+                {
+                  "level": 3,
+                  "text": "Code of Conduct",
+                  "children": []
+                },
+                {
+                  "level": 3,
+                  "text": "Reporting Concerns",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "md008",
+      "difficulty": 4,
+      "matched": true,
+      "execution_time": 12.664751348998834,
+      "prompt_tokens": 592,
+      "completion_tokens": 193,
+      "total_tokens": 785,
+      "tokens_per_second": 15.239146405764762,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "```json\n[\n    {\n        \"decision\": \"Adopt Kafka as the standard event bus for new services.\",\n        \"owner\": \"Ravi Chandran\",\n        \"due\": \"2026-05-01\"\n    },\n    {\n        \"decision\": \"Draft a schema governance policy for event payloads.\",\n        \"owner\": \"Lena Ostrowski\",\n        \"due\": \"2026-04-28\"\n    },\n    {\n        \"decision\": \"Existing SQS-based integrations will not be migrated retroactively.\",\n        \"owner\": \"Diane Foss\",\n        \"due\": \"2026-04-14\"\n    },\n    {\n        \"decision\": \"Schedule a follow-up session on schema governance open questions.\",\n        \"owner\": \"Tomasz Bilski\",\n        \"due\": \"2026-04-21\"\n    }\n]\n```",
+      "parsed_output": [
+        {
+          "decision": "Adopt Kafka as the standard event bus for new services.",
+          "owner": "Ravi Chandran",
+          "due": "2026-05-01"
+        },
+        {
+          "decision": "Draft a schema governance policy for event payloads.",
+          "owner": "Lena Ostrowski",
+          "due": "2026-04-28"
+        },
+        {
+          "decision": "Existing SQS-based integrations will not be migrated retroactively.",
+          "owner": "Diane Foss",
+          "due": "2026-04-14"
+        },
+        {
+          "decision": "Schedule a follow-up session on schema governance open questions.",
+          "owner": "Tomasz Bilski",
+          "due": "2026-04-21"
+        }
+      ]
+    },
+    {
+      "case_id": "md009",
+      "difficulty": 5,
+      "matched": true,
+      "execution_time": 22.552343545998156,
+      "prompt_tokens": 719,
+      "completion_tokens": 335,
+      "total_tokens": 1054,
+      "tokens_per_second": 14.854332070488732,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "```json\n{\n    \"Revenue\": [\n        {\n            \"product_line\": \"Core Platform\",\n            \"q1_revenue_k\": \"4200\",\n            \"yoy_growth\": \"12%\"\n        },\n        {\n            \"product_line\": \"Analytics Add-on\",\n            \"q1_revenue_k\": \"980\",\n            \"yoy_growth\": \"34%\"\n        },\n        {\n            \"product_line\": \"Professional Services\",\n            \"q1_revenue_k\": \"610\",\n            \"yoy_growth\": \"-5%\"\n        }\n    ],\n    \"Customer Retention\": [\n        {\n            \"segment\": \"Enterprise\",\n            \"renewal_rate\": \"96%\",\n            \"net_revenue_retention\": \"118%\"\n        },\n        {\n            \"segment\": \"Mid-Market\",\n            \"renewal_rate\": \"88%\",\n            \"net_revenue_retention\": \"104%\"\n        },\n        {\n            \"segment\": \"SMB\",\n            \"renewal_rate\": \"74%\",\n            \"net_revenue_retention\": \"91%\"\n        }\n    ],\n    \"Support Metrics\": [\n        {\n            \"metric\": \"Median First Response Time\",\n            \"value\": \"2.1h\",\n            \"target\": \"4h\"\n        },\n        {\n            \"metric\": \"CSAT\",\n            \"value\": \"4.6\",\n            \"target\": \"4.5\"\n        },\n        {\n            \"metric\": \"Open Critical Tickets\",\n            \"value\": \"3\",\n            \"target\": \"5\"\n        }\n    ]\n}\n```",
+      "parsed_output": {
+        "Revenue": [
+          {
+            "product_line": "Core Platform",
+            "q1_revenue_k": "4200",
+            "yoy_growth": "12%"
+          },
+          {
+            "product_line": "Analytics Add-on",
+            "q1_revenue_k": "980",
+            "yoy_growth": "34%"
+          },
+          {
+            "product_line": "Professional Services",
+            "q1_revenue_k": "610",
+            "yoy_growth": "-5%"
+          }
+        ],
+        "Customer Retention": [
+          {
+            "segment": "Enterprise",
+            "renewal_rate": "96%",
+            "net_revenue_retention": "118%"
+          },
+          {
+            "segment": "Mid-Market",
+            "renewal_rate": "88%",
+            "net_revenue_retention": "104%"
+          },
+          {
+            "segment": "SMB",
+            "renewal_rate": "74%",
+            "net_revenue_retention": "91%"
+          }
+        ],
+        "Support Metrics": [
+          {
+            "metric": "Median First Response Time",
+            "value": "2.1h",
+            "target": "4h"
+          },
+          {
+            "metric": "CSAT",
+            "value": "4.6",
+            "target": "4.5"
+          },
+          {
+            "metric": "Open Critical Tickets",
+            "value": "3",
+            "target": "5"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "md010",
+      "difficulty": 5,
+      "matched": false,
+      "execution_time": 16.19319994000034,
+      "prompt_tokens": 958,
+      "completion_tokens": 232,
+      "total_tokens": 1190,
+      "tokens_per_second": 14.327001510486822,
+      "finish_reason": "stop",
+      "error": "Output does not match the expected result.\n\nExpected:\n{\n  \"summary_headings\": [\n    {\n      \"level\": 1,\n      \"text\": \"Postmortem: Checkout Service Outage \u2014 2026-06-11\"\n    },\n    {\n      \"level\": 2,\n      \"text\": \"Summary\"\n    },\n    {\n      \"level\": 2,\n      \"text\": \"Timeline\"\n    },\n    {\n      \"level\": 3,\n      \"text\": \"Detection\"\n    },\n    {\n      \"level\": 3,\n      \"text\": \"Mitigation\"\n    },\n    {\n      \"level\": 2,\n      \"text\": \"Action Items\"\n    },\n    {\n      \"level\": 2,\n      \"text\": \"Decisions\"\n    },\n    {\n      \"level\": 2,\n      \"text\": \"Follow-Up\"\n    }\n  ],\n  \"action_items\": [\n    {\n      \"text\": \"Roll back the faulty deploy\",\n      \"done\": true\n    },\n    {\n      \"text\": \"Restore the connection pool tuning parameters\",\n      \"done\": true\n    },\n    {\n      \"text\": \"Add a regression test for connection pool configuration\",\n      \"done\": false\n    },\n    {\n      \"text\": \"Add an alert for connection pool saturation before it causes errors\",\n      \"done\": false\n    },\n    {\n      \"text\": \"Document the connection pool tuning parameters in the service README\",\n      \"done\": false\n    }\n  ],\n  \"decisions\": [\n    {\n      \"decision\": \"Require a peer review specifically for connection pool configuration changes.\",\n      \"owner\": \"Grace Liu\",\n      \"due\": \"2026-06-18\"\n    },\n    {\n      \"decision\": \"Add connection pool saturation to the standard pre-deploy checklist.\",\n      \"owner\": \"Amir Hassan\",\n      \"due\": \"2026-06-25\"\n    }\n  ]\n}\n\nActual:\n{\n  \"summary_headings\": [\n    {\n      \"level\": 1,\n      \"text\": \"Postmortem: Checkout Service Outage \u2014 2026-06-11\"\n    }\n  ],\n  \"action_items\": [\n    {\n      \"text\": \"Roll back the faulty deploy\",\n      \"done\": true\n    },\n    {\n      \"text\": \"Restore the connection pool tuning parameters\",\n      \"done\": true\n    },\n    {\n      \"text\": \"Add a regression test for connection pool configuration\",\n      \"done\": false\n    },\n    {\n      \"text\": \"Add an alert for connection pool saturation before it causes errors\",\n      \"done\": false\n    },\n    {\n      \"text\": \"Document the connection pool tuning parameters in the service README\",\n      \"done\": false\n    }\n  ],\n  \"decisions\": [\n    {\n      \"decision\": \"Require a peer review specifically for connection pool configuration changes\",\n      \"owner\": \"Grace Liu\",\n      \"due\": \"2026-06-18\"\n    },\n    {\n      \"decision\": \"Add connection pool saturation to the standard pre-deploy checklist\",\n      \"owner\": \"Amir Hassan\",\n      \"due\": \"2026-06-25\"\n    }\n  ]\n}",
+      "response_text": "{\n    \"summary_headings\": [\n        {\"level\": 1, \"text\": \"Postmortem: Checkout Service Outage \u2014 2026-06-11\"}\n    ],\n    \"action_items\": [\n        {\"text\": \"Roll back the faulty deploy\", \"done\": true},\n        {\"text\": \"Restore the connection pool tuning parameters\", \"done\": true},\n        {\"text\": \"Add a regression test for connection pool configuration\", \"done\": false},\n        {\"text\": \"Add an alert for connection pool saturation before it causes errors\", \"done\": false},\n        {\"text\": \"Document the connection pool tuning parameters in the service README\", \"done\": false}\n    ],\n    \"decisions\": [\n        {\"decision\": \"Require a peer review specifically for connection pool configuration changes\", \"owner\": \"Grace Liu\", \"due\": \"2026-06-18\"},\n        {\"decision\": \"Add connection pool saturation to the standard pre-deploy checklist\", \"owner\": \"Amir Hassan\", \"due\": \"2026-06-25\"}\n    ]\n}",
+      "parsed_output": {
+        "summary_headings": [
+          {
+            "level": 1,
+            "text": "Postmortem: Checkout Service Outage \u2014 2026-06-11"
+          }
+        ],
+        "action_items": [
+          {
+            "text": "Roll back the faulty deploy",
+            "done": true
+          },
+          {
+            "text": "Restore the connection pool tuning parameters",
+            "done": true
+          },
+          {
+            "text": "Add a regression test for connection pool configuration",
+            "done": false
+          },
+          {
+            "text": "Add an alert for connection pool saturation before it causes errors",
+            "done": false
+          },
+          {
+            "text": "Document the connection pool tuning parameters in the service README",
+            "done": false
+          }
+        ],
+        "decisions": [
+          {
+            "decision": "Require a peer review specifically for connection pool configuration changes",
+            "owner": "Grace Liu",
+            "due": "2026-06-18"
+          },
+          {
+            "decision": "Add connection pool saturation to the standard pre-deploy checklist",
+            "owner": "Amir Hassan",
+            "due": "2026-06-25"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "md011",
+      "difficulty": 3,
+      "matched": true,
+      "execution_time": 17.320036237997556,
+      "prompt_tokens": 678,
+      "completion_tokens": 265,
+      "total_tokens": 943,
+      "tokens_per_second": 15.300198934839976,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "[\n    {\"week_starting\": \"2026-07-06\", \"engineer\": \"Elena Cho\", \"track\": \"primary\"},\n    {\"week_starting\": \"2026-07-13\", \"engineer\": \"Priya Nair\", \"track\": \"secondary\"},\n    {\"week_starting\": \"2026-07-20\", \"engineer\": \"Marcus Webb\", \"track\": \"primary\"},\n    {\"week_starting\": \"2026-07-27\", \"engineer\": \"Elena Cho\", \"track\": \"secondary\"},\n    {\"week_starting\": \"2026-08-03\", \"engineer\": \"Elena Cho\", \"track\": \"primary\"},\n    {\"week_starting\": \"2026-08-10\", \"engineer\": \"Marcus Webb\", \"track\": \"secondary\"},\n    {\"week_starting\": \"2026-08-17\", \"engineer\": \"Priya Nair\", \"track\": \"primary\"},\n    {\"week_starting\": \"2026-08-24\", \"engineer\": \"Marcus Webb\", \"track\": \"secondary\"}\n]",
+      "parsed_output": [
+        {
+          "week_starting": "2026-07-06",
+          "engineer": "Elena Cho",
+          "track": "primary"
+        },
+        {
+          "week_starting": "2026-07-13",
+          "engineer": "Priya Nair",
+          "track": "secondary"
+        },
+        {
+          "week_starting": "2026-07-20",
+          "engineer": "Marcus Webb",
+          "track": "primary"
+        },
+        {
+          "week_starting": "2026-07-27",
+          "engineer": "Elena Cho",
+          "track": "secondary"
+        },
+        {
+          "week_starting": "2026-08-03",
+          "engineer": "Elena Cho",
+          "track": "primary"
+        },
+        {
+          "week_starting": "2026-08-10",
+          "engineer": "Marcus Webb",
+          "track": "secondary"
+        },
+        {
+          "week_starting": "2026-08-17",
+          "engineer": "Priya Nair",
+          "track": "primary"
+        },
+        {
+          "week_starting": "2026-08-24",
+          "engineer": "Marcus Webb",
+          "track": "secondary"
+        }
+      ]
+    },
+    {
+      "case_id": "md012",
+      "difficulty": 3,
+      "matched": true,
+      "execution_time": 15.661932409999281,
+      "prompt_tokens": 589,
+      "completion_tokens": 240,
+      "total_tokens": 829,
+      "tokens_per_second": 15.323779576955218,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "[\n    {\n        \"employee_id\": \"E1001\",\n        \"name\": \"Grace Liu\",\n        \"department\": \"Engineering\",\n        \"badge_level\": \"L3\",\n        \"last_access_date\": \"2026-09-01\"\n    },\n    {\n        \"employee_id\": \"E1002\",\n        \"name\": \"Amir Hassan\",\n        \"department\": \"Facilities\",\n        \"badge_level\": \"L2\",\n        \"last_access_date\": \"2026-09-05\"\n    },\n    {\n        \"employee_id\": \"E1003\",\n        \"name\": \"Sofia Delgado\",\n        \"department\": \"Engineering\",\n        \"badge_level\": \"L3\",\n        \"last_access_date\": \"2026-08-30\"\n    },\n    {\n        \"employee_id\": \"E1004\",\n        \"name\": \"Noah Kim\",\n        \"department\": \"Finance\",\n        \"badge_level\": \"L1\",\n        \"last_access_date\": \"2026-09-02\"\n    }\n]",
+      "parsed_output": [
+        {
+          "employee_id": "E1001",
+          "name": "Grace Liu",
+          "department": "Engineering",
+          "badge_level": "L3",
+          "last_access_date": "2026-09-01"
+        },
+        {
+          "employee_id": "E1002",
+          "name": "Amir Hassan",
+          "department": "Facilities",
+          "badge_level": "L2",
+          "last_access_date": "2026-09-05"
+        },
+        {
+          "employee_id": "E1003",
+          "name": "Sofia Delgado",
+          "department": "Engineering",
+          "badge_level": "L3",
+          "last_access_date": "2026-08-30"
+        },
+        {
+          "employee_id": "E1004",
+          "name": "Noah Kim",
+          "department": "Finance",
+          "badge_level": "L1",
+          "last_access_date": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "case_id": "md013",
+      "difficulty": 4,
+      "matched": true,
+      "execution_time": 15.946839870000986,
+      "prompt_tokens": 648,
+      "completion_tokens": 238,
+      "total_tokens": 886,
+      "tokens_per_second": 14.924587061774094,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "[\n    {\n        \"sku\": \"SKU-100\",\n        \"product_name\": \"Wireless Mouse\",\n        \"category\": \"Peripherals\",\n        \"total_quantity\": 165,\n        \"warehouses\": [\n            {\"warehouse\": \"West\", \"quantity\": 120},\n            {\"warehouse\": \"East\", \"quantity\": 45}\n        ]\n    },\n    {\n        \"sku\": \"SKU-101\",\n        \"product_name\": \"Mechanical Keyboard\",\n        \"category\": \"Peripherals\",\n        \"total_quantity\": 75,\n        \"warehouses\": [\n            {\"warehouse\": \"West\", \"quantity\": 30},\n            {\"warehouse\": \"East\", \"quantity\": 30},\n            {\"warehouse\": \"Central\", \"quantity\": 15}\n        ]\n    },\n    {\n        \"sku\": \"SKU-102\",\n        \"product_name\": \"USB-C Dock\",\n        \"category\": \"Accessories\",\n        \"total_quantity\": 60,\n        \"warehouses\": [\n            {\"warehouse\": \"East\", \"quantity\": 60}\n        ]\n    }\n]",
+      "parsed_output": [
+        {
+          "sku": "SKU-100",
+          "product_name": "Wireless Mouse",
+          "category": "Peripherals",
+          "total_quantity": 165,
+          "warehouses": [
+            {
+              "warehouse": "West",
+              "quantity": 120
+            },
+            {
+              "warehouse": "East",
+              "quantity": 45
+            }
+          ]
+        },
+        {
+          "sku": "SKU-101",
+          "product_name": "Mechanical Keyboard",
+          "category": "Peripherals",
+          "total_quantity": 75,
+          "warehouses": [
+            {
+              "warehouse": "West",
+              "quantity": 30
+            },
+            {
+              "warehouse": "East",
+              "quantity": 30
+            },
+            {
+              "warehouse": "Central",
+              "quantity": 15
+            }
+          ]
+        },
+        {
+          "sku": "SKU-102",
+          "product_name": "USB-C Dock",
+          "category": "Accessories",
+          "total_quantity": 60,
+          "warehouses": [
+            {
+              "warehouse": "East",
+              "quantity": 60
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "md014",
+      "difficulty": 4,
+      "matched": true,
+      "execution_time": 3.93811326499781,
+      "prompt_tokens": 636,
+      "completion_tokens": 52,
+      "total_tokens": 688,
+      "tokens_per_second": 13.20429263987381,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "{\n    \"log_level\": \"info\",\n    \"max_connections\": 250,\n    \"cache_ttl_seconds\": 300,\n    \"feature_flag_new_checkout\": false,\n    \"request_timeout_ms\": 8000\n}",
+      "parsed_output": {
+        "log_level": "info",
+        "max_connections": 250,
+        "cache_ttl_seconds": 300,
+        "feature_flag_new_checkout": false,
+        "request_timeout_ms": 8000
+      }
+    },
+    {
+      "case_id": "md015",
+      "difficulty": 5,
+      "matched": true,
+      "execution_time": 12.743709894999483,
+      "prompt_tokens": 828,
+      "completion_tokens": 185,
+      "total_tokens": 1013,
+      "tokens_per_second": 14.516965744221181,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "[\n    {\"time\": \"14:02\", \"event\": \"Elevated error rate first observed by automated alerting.\", \"error_rate_pct\": 4.8, \"latency_ms\": 340},\n    {\"time\": \"14:06\", \"event\": \"On-call engineer acknowledges the alert and begins investigation.\", \"error_rate_pct\": 6.5, \"latency_ms\": 425},\n    {\"time\": \"14:15\", \"event\": \"Root cause identified as a misconfigured connection pool after a deploy.\", \"error_rate_pct\": 7.0, \"latency_ms\": 440},\n    {\"time\": \"14:20\", \"event\": \"Rollback of the faulty deploy completes.\", \"error_rate_pct\": 0.4, \"latency_ms\": 120}\n]",
+      "parsed_output": [
+        {
+          "time": "14:02",
+          "event": "Elevated error rate first observed by automated alerting.",
+          "error_rate_pct": 4.8,
+          "latency_ms": 340
+        },
+        {
+          "time": "14:06",
+          "event": "On-call engineer acknowledges the alert and begins investigation.",
+          "error_rate_pct": 6.5,
+          "latency_ms": 425
+        },
+        {
+          "time": "14:15",
+          "event": "Root cause identified as a misconfigured connection pool after a deploy.",
+          "error_rate_pct": 7.0,
+          "latency_ms": 440
+        },
+        {
+          "time": "14:20",
+          "event": "Rollback of the faulty deploy completes.",
+          "error_rate_pct": 0.4,
+          "latency_ms": 120
+        }
+      ]
+    },
+    {
+      "case_id": "md016",
+      "difficulty": 5,
+      "matched": true,
+      "execution_time": 11.316606451000553,
+      "prompt_tokens": 665,
+      "completion_tokens": 169,
+      "total_tokens": 834,
+      "tokens_per_second": 14.9338055301073,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "```json\n{\n    \"Platform Team\": {\n        \"project\": \"Core Platform Migration\",\n        \"status\": \"Yellow\",\n        \"blockers\": [\n            \"Waiting on security review sign-off for the new auth service.\",\n            \"Shared staging environment is unstable, delaying integration testing.\"\n        ]\n    },\n    \"Mobile Team\": {\n        \"project\": \"Offline Sync Rollout\",\n        \"status\": \"Green\",\n        \"blockers\": [\n            \"Battery usage regression reported by beta testers, under investigation.\"\n        ]\n    },\n    \"Data Team\": {\n        \"project\": \"Warehouse Schema Redesign\",\n        \"status\": \"Red\",\n        \"blockers\": [\n            \"Migration script fails on tables with more than 10M rows.\",\n            \"No rollback plan has been finalized yet.\"\n        ]\n    }\n}\n```",
+      "parsed_output": {
+        "Platform Team": {
+          "project": "Core Platform Migration",
+          "status": "Yellow",
+          "blockers": [
+            "Waiting on security review sign-off for the new auth service.",
+            "Shared staging environment is unstable, delaying integration testing."
+          ]
+        },
+        "Mobile Team": {
+          "project": "Offline Sync Rollout",
+          "status": "Green",
+          "blockers": [
+            "Battery usage regression reported by beta testers, under investigation."
+          ]
+        },
+        "Data Team": {
+          "project": "Warehouse Schema Redesign",
+          "status": "Red",
+          "blockers": [
+            "Migration script fails on tables with more than 10M rows.",
+            "No rollback plan has been finalized yet."
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "md017",
+      "difficulty": 6,
+      "matched": false,
+      "execution_time": 9.989174326001375,
+      "prompt_tokens": 866,
+      "completion_tokens": 143,
+      "total_tokens": 1009,
+      "tokens_per_second": 14.315497490896457,
+      "finish_reason": "stop",
+      "error": "Output does not match the expected result.\n\nExpected:\n[\n  {\n    \"method\": \"GET\",\n    \"path\": \"/v1/cart\",\n    \"description\": \"Retrieves the current shopping cart for a session.\",\n    \"deprecated\": false\n  },\n  {\n    \"method\": \"POST\",\n    \"path\": \"/v1/cart/items\",\n    \"description\": \"Adds an item to the shopping cart.\",\n    \"deprecated\": false\n  },\n  {\n    \"method\": \"DELETE\",\n    \"path\": \"/v1/cart/items/{id}\",\n    \"description\": \"Removes an item from the shopping cart.\",\n    \"deprecated\": true\n  },\n  {\n    \"method\": \"POST\",\n    \"path\": \"/v2/checkout/session\",\n    \"description\": \"Initiates checkout using the multi-step session-based flow.\",\n    \"deprecated\": false\n  }\n]\n\nActual:\n[\n  {\n    \"method\": \"GET\",\n    \"path\": \"/v1/cart\",\n    \"description\": \"Retrieves the current shopping cart for a session.\",\n    \"deprecated\": true\n  },\n  {\n    \"method\": \"POST\",\n    \"path\": \"/v1/cart/items\",\n    \"description\": \"Adds an item to the shopping cart.\",\n    \"deprecated\": false\n  },\n  {\n    \"method\": \"DELETE\",\n    \"path\": \"/v1/cart/items/{id}\",\n    \"description\": \"Removes an item from the shopping cart.\",\n    \"deprecated\": false\n  },\n  {\n    \"method\": \"POST\",\n    \"path\": \"/v2/checkout/session\",\n    \"description\": \"Initiates checkout using the multi-step session-based flow.\",\n    \"deprecated\": false\n  }\n]",
+      "response_text": "[\n    {\"method\": \"GET\", \"path\": \"/v1/cart\", \"description\": \"Retrieves the current shopping cart for a session.\", \"deprecated\": true},\n    {\"method\": \"POST\", \"path\": \"/v1/cart/items\", \"description\": \"Adds an item to the shopping cart.\", \"deprecated\": false},\n    {\"method\": \"DELETE\", \"path\": \"/v1/cart/items/{id}\", \"description\": \"Removes an item from the shopping cart.\", \"deprecated\": false},\n    {\"method\": \"POST\", \"path\": \"/v2/checkout/session\", \"description\": \"Initiates checkout using the multi-step session-based flow.\", \"deprecated\": false}\n]",
+      "parsed_output": [
+        {
+          "method": "GET",
+          "path": "/v1/cart",
+          "description": "Retrieves the current shopping cart for a session.",
+          "deprecated": true
+        },
+        {
+          "method": "POST",
+          "path": "/v1/cart/items",
+          "description": "Adds an item to the shopping cart.",
+          "deprecated": false
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/cart/items/{id}",
+          "description": "Removes an item from the shopping cart.",
+          "deprecated": false
+        },
+        {
+          "method": "POST",
+          "path": "/v2/checkout/session",
+          "description": "Initiates checkout using the multi-step session-based flow.",
+          "deprecated": false
+        }
+      ]
+    },
+    {
+      "case_id": "md018",
+      "difficulty": 6,
+      "matched": true,
+      "execution_time": 3.925868509002612,
+      "prompt_tokens": 711,
+      "completion_tokens": 52,
+      "total_tokens": 763,
+      "tokens_per_second": 13.24547673483106,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "{\n    \"Travel\": 600,\n    \"Meals\": 75,\n    \"Lodging\": 300,\n    \"Ground Transportation\": 60,\n    \"Remote Work Stipend\": 20\n}",
+      "parsed_output": {
+        "Travel": 600,
+        "Meals": 75,
+        "Lodging": 300,
+        "Ground Transportation": 60,
+        "Remote Work Stipend": 20
+      }
+    },
+    {
+      "case_id": "md019",
+      "difficulty": 7,
+      "matched": true,
+      "execution_time": 12.601158413999656,
+      "prompt_tokens": 910,
+      "completion_tokens": 187,
+      "total_tokens": 1097,
+      "tokens_per_second": 14.839905495692081,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "[\n    {\"id\": \"REQ-1\", \"has_design\": true, \"has_tests\": true, \"open_defect_count\": 0, \"ready_for_release\": true},\n    {\"id\": \"REQ-2\", \"has_design\": true, \"has_tests\": true, \"open_defect_count\": 2, \"ready_for_release\": false},\n    {\"id\": \"REQ-3\", \"has_design\": true, \"has_tests\": false, \"open_defect_count\": 0, \"ready_for_release\": false},\n    {\"id\": \"REQ-4\", \"has_design\": true, \"has_tests\": true, \"open_defect_count\": 0, \"ready_for_release\": true},\n    {\"id\": \"REQ-5\", \"has_design\": false, \"has_tests\": false, \"open_defect_count\": 0, \"ready_for_release\": false}\n]",
+      "parsed_output": [
+        {
+          "id": "REQ-1",
+          "has_design": true,
+          "has_tests": true,
+          "open_defect_count": 0,
+          "ready_for_release": true
+        },
+        {
+          "id": "REQ-2",
+          "has_design": true,
+          "has_tests": true,
+          "open_defect_count": 2,
+          "ready_for_release": false
+        },
+        {
+          "id": "REQ-3",
+          "has_design": true,
+          "has_tests": false,
+          "open_defect_count": 0,
+          "ready_for_release": false
+        },
+        {
+          "id": "REQ-4",
+          "has_design": true,
+          "has_tests": true,
+          "open_defect_count": 0,
+          "ready_for_release": true
+        },
+        {
+          "id": "REQ-5",
+          "has_design": false,
+          "has_tests": false,
+          "open_defect_count": 0,
+          "ready_for_release": false
+        }
+      ]
+    },
+    {
+      "case_id": "md020",
+      "difficulty": 7,
+      "matched": true,
+      "execution_time": 21.306734471003438,
+      "prompt_tokens": 901,
+      "completion_tokens": 317,
+      "total_tokens": 1218,
+      "tokens_per_second": 14.87792511946909,
+      "finish_reason": "stop",
+      "error": null,
+      "response_text": "```json\n[\n    {\n        \"team\": \"Engineering Team\",\n        \"objective\": \"Improve platform reliability\",\n        \"key_result\": \"Ship 8 planned reliability improvements\",\n        \"current\": 6,\n        \"target\": 8,\n        \"percent_complete\": 75\n    },\n    {\n        \"team\": \"Marketing Team\",\n        \"objective\": \"Grow inbound demand\",\n        \"key_result\": \"Generate 4000 marketing qualified leads\",\n        \"current\": 3160,\n        \"target\": 4000,\n        \"percent_complete\": 79\n    },\n    {\n        \"team\": \"Sales Team\",\n        \"objective\": \"Expand enterprise pipeline\",\n        \"key_result\": \"Close 50 new enterprise deals\",\n        \"current\": 42,\n        \"target\": 50,\n        \"percent_complete\": 84\n    },\n    {\n        \"team\": \"Sales Team\",\n        \"objective\": \"Improve win rate\",\n        \"key_result\": \"Increase win rate to 35 qualified opportunities won\",\n        \"current\": 21,\n        \"target\": 35,\n        \"percent_complete\": 60\n    },\n    {\n        \"team\": \"Support Team\",\n        \"objective\": \"Raise customer satisfaction\",\n        \"key_result\": \"Achieve CSAT survey responses above 90%\",\n        \"current\": 87,\n        \"target\": 90,\n        \"percent_complete\": 97\n    }\n]\n```",
+      "parsed_output": [
+        {
+          "team": "Engineering Team",
+          "objective": "Improve platform reliability",
+          "key_result": "Ship 8 planned reliability improvements",
+          "current": 6,
+          "target": 8,
+          "percent_complete": 75
+        },
+        {
+          "team": "Marketing Team",
+          "objective": "Grow inbound demand",
+          "key_result": "Generate 4000 marketing qualified leads",
+          "current": 3160,
+          "target": 4000,
+          "percent_complete": 79
+        },
+        {
+          "team": "Sales Team",
+          "objective": "Expand enterprise pipeline",
+          "key_result": "Close 50 new enterprise deals",
+          "current": 42,
+          "target": 50,
+          "percent_complete": 84
+        },
+        {
+          "team": "Sales Team",
+          "objective": "Improve win rate",
+          "key_result": "Increase win rate to 35 qualified opportunities won",
+          "current": 21,
+          "target": 35,
+          "percent_complete": 60
+        },
+        {
+          "team": "Support Team",
+          "objective": "Raise customer satisfaction",
+          "key_result": "Achieve CSAT survey responses above 90%",
+          "current": 87,
+          "target": 90,
+          "percent_complete": 97
+        }
+      ]
+    }
+  ]
+}

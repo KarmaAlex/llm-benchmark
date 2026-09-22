@@ -62,9 +62,6 @@ def run_case(
 
     response = provider.generate(chat_prompt)
 
-    case_directory = run_directory / case_id
-    case_directory.mkdir(parents=True, exist_ok=True)
-
     difficulty = case.metadata.get("difficulty")
     token_stats = dict(
         prompt_tokens=response.prompt_tokens,

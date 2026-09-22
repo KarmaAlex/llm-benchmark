@@ -100,6 +100,12 @@ Two standalone scripts run as `python -m scripts.<script>`:
 
 New benchmark cases (new `mdNNN/` or `<RULE_ID>/` directories under `benchmark/`) are picked up automatically by the `run_all_*` scripts — there's no manifest or registration step.
 
+## Reading a run back
+
+`python -m analysis.report [<run_id> ...]` re-renders a finished run's `report.json` as a readable summary — the per-case table, where cases fell short, and what it cost. With no argument it takes the most recent run; `--list` shows what's available with a headline each, and `-v` prints the failures' full untruncated output.
+
+The two suites are graded on different things, so they're reported differently and the suite is detected from the report: **markdown** gets the matched rate and a by-difficulty breakdown; **sonar** gets the five-stage funnel (applied → compiled → tests passed → issue resolved → clean fix), which cases dropped out where, and the issues that survived or were newly introduced. A sonar run that was never analyzed says so rather than showing a blank column.
+
 ## How outputs are validated
 
 **Markdown**: the model's response is extracted as JSON (`JsonExtractor`, tolerant of ` ```json ` code fences) and compared against each case's `expected.json` with strict structural equality (`JsonComparator`) — every key, value, type, and array order must match exactly. There is no partial credit or fuzzy matching.
