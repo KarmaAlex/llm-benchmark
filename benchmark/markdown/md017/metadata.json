@@ -1,0 +1,10 @@
+{
+    "category": "spec-deprecation-reconciliation",
+    "difficulty": 6,
+    "description": "Cross-reference an API spec against a deprecation log and the current release version to determine which endpoints are active and which are deprecated.",
+    "files": [
+        "api_spec.md",
+        "deprecations.md",
+        "current_release.md"
+    ]
+}

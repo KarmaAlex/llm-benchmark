@@ -1,0 +1,32 @@
+[
+    {
+        "sku": "SKU-100",
+        "product_name": "Wireless Mouse",
+        "category": "Peripherals",
+        "total_quantity": 165,
+        "warehouses": [
+            {"warehouse": "West", "quantity": 120},
+            {"warehouse": "East", "quantity": 45}
+        ]
+    },
+    {
+        "sku": "SKU-101",
+        "product_name": "Mechanical Keyboard",
+        "category": "Peripherals",
+        "total_quantity": 75,
+        "warehouses": [
+            {"warehouse": "West", "quantity": 30},
+            {"warehouse": "East", "quantity": 30},
+            {"warehouse": "Central", "quantity": 15}
+        ]
+    },
+    {
+        "sku": "SKU-102",
+        "product_name": "USB-C Dock",
+        "category": "Accessories",
+        "total_quantity": 60,
+        "warehouses": [
+            {"warehouse": "East", "quantity": 60}
+        ]
+    }
+]

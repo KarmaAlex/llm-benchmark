@@ -1,0 +1,25 @@
+{
+    "Platform Team": {
+        "project": "Core Platform Migration",
+        "status": "Yellow",
+        "blockers": [
+            "Waiting on security review sign-off for the new auth service.",
+            "Shared staging environment is unstable, delaying integration testing."
+        ]
+    },
+    "Mobile Team": {
+        "project": "Offline Sync Rollout",
+        "status": "Green",
+        "blockers": [
+            "Battery usage regression reported by beta testers, under investigation."
+        ]
+    },
+    "Data Team": {
+        "project": "Warehouse Schema Redesign",
+        "status": "Red",
+        "blockers": [
+            "Migration script fails on tables with more than 10M rows.",
+            "No rollback plan has been finalized yet."
+        ]
+    }
+}

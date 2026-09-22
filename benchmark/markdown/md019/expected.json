@@ -1,0 +1,7 @@
+[
+    {"id": "REQ-1", "has_design": true, "has_tests": true, "open_defect_count": 0, "ready_for_release": true},
+    {"id": "REQ-2", "has_design": true, "has_tests": true, "open_defect_count": 2, "ready_for_release": false},
+    {"id": "REQ-3", "has_design": true, "has_tests": false, "open_defect_count": 0, "ready_for_release": false},
+    {"id": "REQ-4", "has_design": true, "has_tests": true, "open_defect_count": 0, "ready_for_release": true},
+    {"id": "REQ-5", "has_design": false, "has_tests": false, "open_defect_count": 0, "ready_for_release": false}
+]

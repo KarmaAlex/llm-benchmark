@@ -1,0 +1,26 @@
+[
+    {
+        "method": "GET",
+        "path": "/v1/cart",
+        "description": "Retrieves the current shopping cart for a session.",
+        "deprecated": false
+    },
+    {
+        "method": "POST",
+        "path": "/v1/cart/items",
+        "description": "Adds an item to the shopping cart.",
+        "deprecated": false
+    },
+    {
+        "method": "DELETE",
+        "path": "/v1/cart/items/{id}",
+        "description": "Removes an item from the shopping cart.",
+        "deprecated": true
+    },
+    {
+        "method": "POST",
+        "path": "/v2/checkout/session",
+        "description": "Initiates checkout using the multi-step session-based flow.",
+        "deprecated": false
+    }
+]

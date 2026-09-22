@@ -1,0 +1,9 @@
+{
+    "category": "key-lookup-join",
+    "difficulty": 3,
+    "description": "Join an employee directory table against a badge access log table on employee ID.",
+    "files": [
+        "employees.md",
+        "badge_access.md"
+    ]
+}

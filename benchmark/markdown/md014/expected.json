@@ -1,0 +1,7 @@
+{
+    "log_level": "info",
+    "max_connections": 250,
+    "cache_ttl_seconds": 300,
+    "feature_flag_new_checkout": false,
+    "request_timeout_ms": 8000
+}

@@ -1,0 +1,11 @@
+{
+    "category": "requirements-traceability",
+    "difficulty": 7,
+    "description": "Trace each requirement through a design doc, a test plan, and an open-defects log to determine release readiness.",
+    "files": [
+        "requirements.md",
+        "design_doc.md",
+        "test_plan.md",
+        "open_defects.md"
+    ]
+}

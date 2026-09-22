@@ -1,0 +1,11 @@
+{
+    "category": "okr-rollup-normalization",
+    "difficulty": 7,
+    "description": "Normalize key results from four team OKR documents, each using a different progress-reporting format, into one flat schema with a computed completion percentage.",
+    "files": [
+        "okr_sales.md",
+        "okr_marketing.md",
+        "okr_engineering.md",
+        "okr_support.md"
+    ]
+}

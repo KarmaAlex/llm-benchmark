@@ -1,0 +1,10 @@
+{
+    "category": "policy-amendment-precedence",
+    "difficulty": 6,
+    "description": "Resolve the effective expense policy limits from a base policy plus an amendment, ignoring a non-authoritative FAQ document.",
+    "files": [
+        "expense_policy_v1.md",
+        "policy_amendment_2026_q2.md",
+        "policy_faq.md"
+    ]
+}

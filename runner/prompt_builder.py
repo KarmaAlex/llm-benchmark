@@ -29,9 +29,9 @@ class PromptBuilder:
                 placeholder,
                 value,
             )
-        files_concat=""
+        files_concat = ""
         for name, content in benchmark.files.items():
-            files_concat+=name+"\n\n"+content+"\n"
+            files_concat += f"### File: {name}\n\n{content}\n\n---\n\n"
         user = user.replace("{{files}}", files_concat)
         unresolved = re.findall(
                     r"\{\{(.*?)\}\}",

@@ -1,0 +1,42 @@
+[
+    {
+        "team": "Engineering Team",
+        "objective": "Improve platform reliability",
+        "key_result": "Ship 8 planned reliability improvements",
+        "current": 6,
+        "target": 8,
+        "percent_complete": 75
+    },
+    {
+        "team": "Marketing Team",
+        "objective": "Grow inbound demand",
+        "key_result": "Generate 4000 marketing qualified leads",
+        "current": 3160,
+        "target": 4000,
+        "percent_complete": 79
+    },
+    {
+        "team": "Sales Team",
+        "objective": "Expand enterprise pipeline",
+        "key_result": "Close 50 new enterprise deals",
+        "current": 42,
+        "target": 50,
+        "percent_complete": 84
+    },
+    {
+        "team": "Sales Team",
+        "objective": "Improve win rate",
+        "key_result": "Increase win rate to 35 qualified opportunities won",
+        "current": 21,
+        "target": 35,
+        "percent_complete": 60
+    },
+    {
+        "team": "Support Team",
+        "objective": "Raise customer satisfaction",
+        "key_result": "Achieve CSAT survey responses above 90%",
+        "current": 87,
+        "target": 90,
+        "percent_complete": 97
+    }
+]

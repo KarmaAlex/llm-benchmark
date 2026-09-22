@@ -1,0 +1,26 @@
+[
+    {
+        "time": "14:02",
+        "event": "Elevated error rate first observed by automated alerting.",
+        "error_rate_pct": 4.8,
+        "latency_ms": 340
+    },
+    {
+        "time": "14:06",
+        "event": "On-call engineer acknowledges the alert and begins investigation.",
+        "error_rate_pct": 6.5,
+        "latency_ms": 425
+    },
+    {
+        "time": "14:15",
+        "event": "Root cause identified as a misconfigured connection pool after a deploy.",
+        "error_rate_pct": 7.0,
+        "latency_ms": 440
+    },
+    {
+        "time": "14:20",
+        "event": "Rollback of the faulty deploy completes.",
+        "error_rate_pct": 0.4,
+        "latency_ms": 120
+    }
+]

@@ -1,0 +1,9 @@
+{
+    "category": "timeline-metrics-correlation",
+    "difficulty": 5,
+    "description": "Correlate an incident timeline's events against a separate timestamped service metrics log by exact timestamp match.",
+    "files": [
+        "incident_timeline.md",
+        "service_metrics_log.md"
+    ]
+}

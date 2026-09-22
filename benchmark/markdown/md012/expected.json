@@ -1,0 +1,30 @@
+[
+    {
+        "employee_id": "E1001",
+        "name": "Grace Liu",
+        "department": "Engineering",
+        "badge_level": "L3",
+        "last_access_date": "2026-09-01"
+    },
+    {
+        "employee_id": "E1002",
+        "name": "Amir Hassan",
+        "department": "Facilities",
+        "badge_level": "L2",
+        "last_access_date": "2026-09-05"
+    },
+    {
+        "employee_id": "E1003",
+        "name": "Sofia Delgado",
+        "department": "Engineering",
+        "badge_level": "L3",
+        "last_access_date": "2026-08-30"
+    },
+    {
+        "employee_id": "E1004",
+        "name": "Noah Kim",
+        "department": "Finance",
+        "badge_level": "L1",
+        "last_access_date": "2026-09-02"
+    }
+]

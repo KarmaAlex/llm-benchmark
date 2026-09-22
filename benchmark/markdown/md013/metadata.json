@@ -1,0 +1,9 @@
+{
+    "category": "table-aggregation-join",
+    "difficulty": 4,
+    "description": "Join a product catalog against per-warehouse inventory levels and aggregate total quantity on hand per SKU.",
+    "files": [
+        "product_catalog.md",
+        "inventory_levels.md"
+    ]
+}

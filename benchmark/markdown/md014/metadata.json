@@ -1,0 +1,10 @@
+{
+    "category": "config-override-resolution",
+    "difficulty": 4,
+    "description": "Resolve the effective production configuration from a base defaults file plus environment-specific override files, ignoring the unrelated staging overrides.",
+    "files": [
+        "config_base.md",
+        "config_staging.md",
+        "config_production.md"
+    ]
+}

@@ -1,0 +1,9 @@
+{
+    "category": "list-union",
+    "difficulty": 3,
+    "description": "Merge two on-call rotation schedules (primary and secondary tracks) into one chronological list.",
+    "files": [
+        "oncall_primary.md",
+        "oncall_secondary.md"
+    ]
+}

@@ -1,0 +1,10 @@
+{
+    "category": "status-rollup-normalization",
+    "difficulty": 5,
+    "description": "Normalize three weekly status reports that each label their blockers section differently into one unified schema.",
+    "files": [
+        "team_platform_status.md",
+        "team_mobile_status.md",
+        "team_data_status.md"
+    ]
+}
