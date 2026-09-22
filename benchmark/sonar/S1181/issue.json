@@ -1,0 +1,6 @@
+{
+    "rule": "java:S1181",
+    "file": "src/main/java/com/benchmark/task/TaskRunner.java",
+    "line": 11,
+    "message": "Catch Exception instead of Throwable."
+}

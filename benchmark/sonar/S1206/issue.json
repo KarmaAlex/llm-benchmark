@@ -1,0 +1,6 @@
+{
+    "rule": "java:S1206",
+    "file": "src/main/java/com/benchmark/catalog/ProductKey.java",
+    "line": 30,
+    "message": "This class overrides \"equals()\" and should therefore also override \"hashCode()\"."
+}

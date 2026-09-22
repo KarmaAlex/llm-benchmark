@@ -1,8 +1,0 @@
-{
-    "id": "S138_01",
-    "rule": "java:S138",
-    "files": [
-        "src/main/java/com/benchmark/reportgen/ReportGenerator.java",
-        "pom.xml"
-    ]
-}

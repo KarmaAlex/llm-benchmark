@@ -1,7 +1,0 @@
-{
-    "rule": "java:S1696",
-    "file": "src/main/java/com/benchmark/config/ConfigLoader.java",
-    "line": 12,
-    "message": "\"NullPointerException\" should not be caught.",
-    "description": "Catching \"NullPointerException\" is used here to work around \"settings.get(key)\" possibly returning null instead of checking for null explicitly before dereferencing it, which hides the real error condition and can mask unrelated null pointer bugs in the try block."
-}

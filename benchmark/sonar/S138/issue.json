@@ -1,7 +1,0 @@
-{
-    "rule": "java:S138",
-    "file": "src/main/java/com/benchmark/reportgen/ReportGenerator.java",
-    "line": 7,
-    "message": "This method has 67 lines, which is greater than the 40 lines authorized. Split it into smaller methods.",
-    "description": "\"generateFullReport\" (lines 7-73) does several unrelated things in one method body: computing revenue totals, computing min/max revenue, computing payroll totals, and rendering each report section. It should be split into smaller, single-purpose methods, e.g. one per report section."
-}

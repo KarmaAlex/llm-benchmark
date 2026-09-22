@@ -1,0 +1,8 @@
+{
+    "id": "S1206_01",
+    "rule": "java:S1206",
+    "files": [
+        "src/main/java/com/benchmark/catalog/ProductKey.java",
+        "pom.xml"
+    ]
+}

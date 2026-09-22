@@ -1,0 +1,10 @@
+{
+    "id": "S1181_01",
+    "rule": "java:S1181",
+    "files": [
+        "src/main/java/com/benchmark/task/Task.java",
+        "src/main/java/com/benchmark/task/TaskFailedException.java",
+        "src/main/java/com/benchmark/task/TaskRunner.java",
+        "pom.xml"
+    ]
+}
