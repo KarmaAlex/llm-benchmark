@@ -23,7 +23,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--config",
-    default="llama-3.1-8B-instruct-q6",
+    default="qwen2.5-coder-3b-q4",
     help="Model config name under configs/ to use (default: llama-3.1-8B-instruct-q6).",
 )
 parser.add_argument(
