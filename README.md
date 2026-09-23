@@ -26,7 +26,7 @@ results/      Timestamped output of each run_all_* invocation, one report.json p
 Requires Python ≥ 3.11.
 
 ```bash
-pip install -e .          # core deps: openai, llama-cpp-python, PyYAML, python-dotenv
+pip install -e .          # core deps: openai, llama-cpp-python, PyYAML, python-dotenv, huggingface-hub
 pip install -e ".[dev]"   # + pytest, for running tests/
 ```
 
@@ -34,7 +34,7 @@ pip install -e ".[dev]"   # + pytest, for running tests/
 
 **API-based models** (`provider: openai` configs, e.g. `gpt5-markdown.yaml`): copy `.env.example` to `.env` and set `OPENAI_API_KEY`. it's loaded automatically on `import runner`, so no per-script setup is needed. An explicit `OPENAI_API_KEY=... python -m ...` in the shell still overrides the file.
 
-**Local models** (`provider: llama.cpp` configs): place GGUF weight files under `models/` (gitignored) and point each config's `model:` field at the relative path. Inference goes through the `llama-cpp-python` bindings directly — no separate llama.cpp server process is required, though `llama-cpp-python` needs a working C/C++ toolchain (and CUDA, for GPU offload) to install.
+**Local models** (`provider: llama.cpp` configs): place GGUF weight files under `models/` (gitignored) and point each config's `model:` field at the relative path. Inference goes through the `llama-cpp-python` bindings directly — no separate llama.cpp server process is required, though `llama-cpp-python` needs a working C/C++ toolchain (and CUDA, for GPU offload) to install. `python -m scripts.download_model` fetches a GGUF file from the Hugging Face Hub straight into `models/` (see *Downloading models* below) instead of doing it by hand.
 
 **Sonar benchmark only**: requires `mvn`/`./mvnw` and a JDK on `PATH` (used to compile/test patched projects), and the system `patch` utility (used for `--edit-mode diff`). The SonarQube analysis phase additionally needs `podman` — it runs a containerized SonarQube on `localhost:9000` (see *Sonar analysis phase* below). Without podman, runs still complete; the sonar fields are recorded as skipped.
 
@@ -91,12 +91,31 @@ All commands run as `python -m runner.<script>` from the repo root.
 
 `run_all_sonar` performs the analysis phase inline by default; pass `--no-sonar` to skip it and run `analyze_sonar_run` later instead.
 
-Two standalone scripts run as `python -m scripts.<script>`:
+Standalone scripts run as `python -m scripts.<script>`:
 
 | Script | What it does |
 |---|---|
 | `sonar_server {start,status,stop,reset}` | Manual control of the shared SonarQube container. `reset` deletes the container, its volumes and the stored credentials. |
 | `verify_sonar_issues [--cases ...] [--refresh]` | Checks the *fixtures*: that the issue each `benchmark/sonar/<ID>/issue.json` claims is really what SonarQube reports (same rule, same file, same line). Reads the cached baselines, so it's near-instant once they're warm. |
+| `download_model <repo_id> [filename] [--list] [--output-name ...]` | Downloads a GGUF file from the Hugging Face Hub into `models/`. See *Downloading models* below. |
+
+### Downloading models
+
+`python -m scripts.download_model <repo_id> <filename>` fetches one file from a Hugging Face repo straight into `models/`, so a config's `model:` field resolves without a manual browser download. It's a thin wrapper over `huggingface_hub.hf_hub_download` and needs no separate `git-lfs`/`huggingface-cli` setup.
+
+```bash
+# See what's in a repo before picking a quantization.
+python -m scripts.download_model bartowski/Qwen2.5-Coder-7B-Instruct-GGUF --list
+
+# Download one file, keeping its name from the repo.
+python -m scripts.download_model bartowski/Qwen2.5-Coder-7B-Instruct-GGUF Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf
+
+# ...or save it under a different local filename, e.g. to match a configs/*.yaml `model:` entry.
+python -m scripts.download_model bartowski/Qwen2.5-Coder-7B-Instruct-GGUF Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf \
+    --output-name qwen2.5-coder-7b-instruct-q4_k_m.gguf
+```
+
+A file that already exists at the destination is left alone (`--force` to re-download); `--revision` pins a branch/tag/commit. Gated or private repos need a token: set `HF_TOKEN` in `.env` (loaded the same way as `OPENAI_API_KEY`, see `runner/env.py`) and it's picked up automatically, or pass `--token` explicitly to override it for one call. Public GGUF repos — the common case — need no token at all.
 
 New benchmark cases (new `mdNNN/` or `<RULE_ID>/` directories under `benchmark/`) are picked up automatically by the `run_all_*` scripts — there's no manifest or registration step.
 

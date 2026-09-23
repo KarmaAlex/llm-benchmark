@@ -7,3 +7,4 @@ results/test/
 .pytest_cache
 .sonar-server.json
 .cache/
+.vscode

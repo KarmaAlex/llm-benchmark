@@ -5,6 +5,7 @@ BENCHMARK_DIR = PROJECT_ROOT / "benchmark"
 CONFIG_DIR = PROJECT_ROOT / "configs"
 PROMPT_DIR = PROJECT_ROOT / "prompts"
 RESULTS_DIR = PROJECT_ROOT / "results"
+MODELS_DIR = PROJECT_ROOT / "models"
 
 # Machine-local, gitignored scratch: caches that are expensive to rebuild but
 # derivable from the repo (pristine sonar baselines) and the Maven repository
