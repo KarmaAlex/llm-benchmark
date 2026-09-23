@@ -106,6 +106,20 @@ New benchmark cases (new `mdNNN/` or `<RULE_ID>/` directories under `benchmark/`
 
 The two suites are graded on different things, so they're reported differently and the suite is detected from the report: **markdown** gets the matched rate and a by-difficulty breakdown; **sonar** gets the five-stage funnel (applied → compiled → tests passed → issue resolved → clean fix), which cases dropped out where, and the issues that survived or were newly introduced. A sonar run that was never analyzed says so rather than showing a blank column.
 
+## How the tests work
+
+Every case is **zero-shot**: one system message plus one user message, no examples, no conversation history, no retries or self-correction loop. The model gets exactly one attempt to produce the final answer from the task description and the provided context
+
+### Prompt construction
+
+A chat prompt is assembled from three pieces, all under `prompts/`:
+
+- **`system_v1.md`** — the shared system message for every suite: be an expert software engineering assistant, follow the task instructions exactly, and output nothing but what was asked for. This is the only part that doesn't vary per case.
+- **A user-prompt template** — one file per suite/edit-mode combination (`markdown_v1.md`, `sonar_v2.md`, `sonar_structured_v1.md`, `sonar_toolcall_v1.md`), containing the task framing, the output-format contract, and `{{placeholder}}` tokens.
+- **The benchmark case's own data** — `PromptBuilder.build()` (`runner/prompt_builder.py`) substitutes each placeholder: every key in the case's `metadata.json` and every other file in the case directory (`issue.json` → `{{issue}}`, `rule.md` → `{{rule}}`, etc.) is available by its filename stem, JSON-encoded if it isn't already a string. `{{files}}` is special-cased to concatenate every file listed in `metadata["files"]`, each rendered with `### File: <path>` headers; for sonar cases these are **line-numbered** (`ProjectFileLoader`, blank lines shown as `<BLANK>`) so the model can cite a precise location without the line numbers themselves being part of any diff it produces. Any placeholder left unresolved after substitution raises an error rather than silently sending `{{...}}` to the model.
+
+Because template and data are cleanly separated, adding a benchmark case never touches prompt code — dropping files into `benchmark/<suite>/<case_id>/` is enough.
+
 ## How outputs are validated
 
 **Markdown**: the model's response is extracted as JSON (`JsonExtractor`, tolerant of ` ```json ` code fences) and compared against each case's `expected.json` with strict structural equality (`JsonComparator`) — every key, value, type, and array order must match exactly. There is no partial credit or fuzzy matching.
