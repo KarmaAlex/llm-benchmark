@@ -114,9 +114,7 @@ python -m scripts.download_model bartowski/Qwen2.5-Coder-7B-Instruct-GGUF Qwen2.
     --output-name qwen2.5-coder-7b-instruct-q4_k_m.gguf
 ```
 
-A file that already exists at the destination is left alone (`--force` to re-download); `--revision` pins a branch/tag/commit. Gated or private repos need a token: set `HF_TOKEN` in `.env` (loaded the same way as `OPENAI_API_KEY`, see `runner/env.py`) and it's picked up automatically, or pass `--token` explicitly to override it for one call. Public GGUF repos — the common case — need no token at all.
-
-New benchmark cases (new `mdNNN/` or `<RULE_ID>/` directories under `benchmark/`) are picked up automatically by the `run_all_*` scripts — there's no manifest or registration step.
+A file that already exists at the destination is left alone (`--force` to re-download); `--revision` pins a branch/tag/commit. Gated or private repos need a token: set `HF_TOKEN` in `.env` (loaded the same way as `OPENAI_API_KEY`, see `runner/env.py`) and it's picked up automatically, or pass `--token` explicitly to override it for one call. Public GGUF repos generally don't need a token but you may be rate limited or the download may fail if it is particularly large.
 
 ## Reading a run back
 
