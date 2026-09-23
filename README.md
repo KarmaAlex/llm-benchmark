@@ -96,7 +96,6 @@ Standalone scripts run as `python -m scripts.<script>`:
 | Script | What it does |
 |---|---|
 | `sonar_server {start,status,stop,reset}` | Manual control of the shared SonarQube container. `reset` deletes the container, its volumes and the stored credentials. |
-| `verify_sonar_issues [--cases ...] [--refresh]` | Checks the *fixtures*: that the issue each `benchmark/sonar/<ID>/issue.json` claims is really what SonarQube reports (same rule, same file, same line). Reads the cached baselines, so it's near-instant once they're warm. |
 | `download_model <repo_id> [filename] [--list] [--output-name ...]` | Downloads a GGUF file from the Hugging Face Hub into `models/`. See *Downloading models* below. |
 
 ### Downloading models
