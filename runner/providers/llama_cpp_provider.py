@@ -5,6 +5,7 @@ from typing import cast
 from llama_cpp import Llama
 from openai.types.chat import ChatCompletion
 
+from runner.gpu_memory import get_gpu_memory_used_mb
 from runner.models.chat_prompt import ChatPrompt
 from runner.models.model_config import ModelConfig
 from runner.models.model_response import ModelResponse
@@ -37,6 +38,7 @@ class LlamaCppProvider(ModelProvider):
         response = self._generate(prompt)
 
         latency = time.perf_counter() - start
+        gpu_memory_mb = get_gpu_memory_used_mb()
 
         usage = response.usage
         message = response.choices[0].message
@@ -49,6 +51,7 @@ class LlamaCppProvider(ModelProvider):
             finish_reason=response.choices[0].finish_reason,
             raw=response.model_dump(),
             tool_calls=self._extract_tool_calls(message),
+            gpu_memory_mb=gpu_memory_mb,
         )
 
     def _generate(self, prompt: ChatPrompt) -> ChatCompletion:

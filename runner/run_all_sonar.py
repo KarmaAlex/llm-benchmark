@@ -51,6 +51,7 @@ class SonarCaseResult:
     completion_tokens: int = 0
     total_tokens: int = 0
     tokens_per_second: float = 0.0
+    gpu_memory_mb: float | None = None
     finish_reason: str | None = None
     edit_match_summary: str | None = None
     error: str | None = None
@@ -126,6 +127,7 @@ def generate_case(
         completion_tokens=response.completion_tokens,
         total_tokens=response.prompt_tokens + response.completion_tokens,
         tokens_per_second=tokens_per_second(response.completion_tokens, response.latency),
+        gpu_memory_mb=response.gpu_memory_mb,
         finish_reason=response.finish_reason,
         edit_match_summary=_edit_match_summary(outcome.edit_results),
     )
@@ -261,6 +263,8 @@ def compute_summary(results: list[SonarCaseResult], wall_time: float) -> dict:
     clean_fix_count = sum(1 for r in results if r.clean_fix)
     new_issues_total = sum(r.new_issues_count for r in results)
     total_sonar_time = sum(r.sonar_time for r in results)
+    gpu_memory_samples = [r.gpu_memory_mb for r in results if r.gpu_memory_mb is not None]
+    peak_gpu_memory_mb = max(gpu_memory_samples) if gpu_memory_samples else None
 
     return {
         "total_cases": total,
@@ -288,6 +292,7 @@ def compute_summary(results: list[SonarCaseResult], wall_time: float) -> dict:
         "total_execution_time": total_execution_time,
         "total_compile_time": total_compile_time,
         "total_test_time": total_test_time,
+        "peak_gpu_memory_mb": peak_gpu_memory_mb,
         "wall_time": wall_time,
     }
 
@@ -295,7 +300,8 @@ def compute_summary(results: list[SonarCaseResult], wall_time: float) -> dict:
 def print_report(results: list[SonarCaseResult], summary: dict) -> None:
     print(
         f"\n{'Case':<10} {'Applied':<9} {'Compiled':<10} {'Tests':<14} {'Resolved':<10} "
-        f"{'New':<5} {'Clean':<7} {'Time (s)':<10} {'Tokens':<9} {'Tok/s':<8} {'Match':<16} Error"
+        f"{'New':<5} {'Clean':<7} {'Time (s)':<10} {'Tokens':<9} {'Tok/s':<8} "
+        f"{'GPU MiB':<9} {'Match':<16} Error"
     )
     for r in results:
         if not r.tests_ran:
@@ -304,11 +310,12 @@ def print_report(results: list[SonarCaseResult], summary: dict) -> None:
             tests_summary = f"{r.tests_run_count - r.tests_failed - r.tests_errored}/{r.tests_run_count}"
         resolved = str(r.target_resolved) if r.sonar_analyzed else "n/a"
         new_issues = str(r.new_issues_count) if r.sonar_analyzed else "-"
+        gpu_memory = f"{r.gpu_memory_mb:.0f}" if r.gpu_memory_mb is not None else "n/a"
         print(
             f"{r.case_id:<10} {str(r.applied):<9} {str(r.compiled):<10} {tests_summary:<14} "
             f"{resolved:<10} {new_issues:<5} {str(r.clean_fix):<7} "
             f"{r.execution_time:<10.2f} {r.total_tokens:<9} "
-            f"{r.tokens_per_second:<8.1f} {r.edit_match_summary or '':<16} "
+            f"{r.tokens_per_second:<8.1f} {gpu_memory:<9} {r.edit_match_summary or '':<16} "
             f"{r.error or r.sonar_error or ''}"
         )
 
@@ -334,6 +341,8 @@ def print_report(results: list[SonarCaseResult], summary: dict) -> None:
           f"total compile time: {summary['total_compile_time']:.2f}s, "
           f"total test time: {summary['total_test_time']:.2f}s, "
           f"total sonar time: {summary.get('total_sonar_time', 0.0):.2f}s")
+    if summary.get("peak_gpu_memory_mb") is not None:
+        print(f"Peak GPU memory: {summary['peak_gpu_memory_mb']:.0f} MiB")
     print(f"Wall-clock run time: {summary['wall_time']:.2f}s")
 
 

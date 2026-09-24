@@ -37,6 +37,7 @@ class MarkdownCaseResult:
     completion_tokens: int = 0
     total_tokens: int = 0
     tokens_per_second: float = 0.0
+    gpu_memory_mb: float | None = None
     finish_reason: str | None = None
     error: str | None = None
     response_text: str | None = None
@@ -68,6 +69,7 @@ def run_case(
         completion_tokens=response.completion_tokens,
         total_tokens=response.prompt_tokens + response.completion_tokens,
         tokens_per_second=tokens_per_second(response.completion_tokens, response.latency),
+        gpu_memory_mb=response.gpu_memory_mb,
         finish_reason=response.finish_reason,
     )
 
@@ -104,6 +106,8 @@ def compute_summary(results: list[MarkdownCaseResult], wall_time: float) -> dict
     total_prompt_tokens = sum(r.prompt_tokens for r in results)
     total_completion_tokens = sum(r.completion_tokens for r in results)
     total_execution_time = sum(r.execution_time for r in results)
+    gpu_memory_samples = [r.gpu_memory_mb for r in results if r.gpu_memory_mb is not None]
+    peak_gpu_memory_mb = max(gpu_memory_samples) if gpu_memory_samples else None
 
     by_difficulty: dict[int, dict] = defaultdict(lambda: {"total": 0, "matched": 0})
     for r in results:
@@ -122,6 +126,7 @@ def compute_summary(results: list[MarkdownCaseResult], wall_time: float) -> dict
         "avg_tokens_per_second": tokens_per_second(total_completion_tokens, total_execution_time),
         "avg_execution_time": total_execution_time / total if total else 0.0,
         "total_execution_time": total_execution_time,
+        "peak_gpu_memory_mb": peak_gpu_memory_mb,
         "wall_time": wall_time,
         "by_difficulty": {
             str(k): v for k, v in sorted(by_difficulty.items())
@@ -132,14 +137,15 @@ def compute_summary(results: list[MarkdownCaseResult], wall_time: float) -> dict
 def print_report(results: list[MarkdownCaseResult], summary: dict) -> None:
     print(
         f"\n{'Case':<10} {'Difficulty':<11} {'Matched':<9} {'Time (s)':<10} "
-        f"{'Tokens':<9} {'Tok/s':<8} Error"
+        f"{'Tokens':<9} {'Tok/s':<8} {'GPU MiB':<9} Error"
     )
     for r in results:
         error_summary = (r.error or "").splitlines()[0] if r.error else ""
+        gpu_memory = f"{r.gpu_memory_mb:.0f}" if r.gpu_memory_mb is not None else "n/a"
         print(
             f"{r.case_id:<10} {str(r.difficulty):<11} {str(r.matched):<9} "
             f"{r.execution_time:<10.2f} {r.total_tokens:<9} "
-            f"{r.tokens_per_second:<8.1f} {error_summary}"
+            f"{r.tokens_per_second:<8.1f} {gpu_memory:<9} {error_summary}"
         )
 
     print(f"\nMatched: {summary['matched_count']}/{summary['total_cases']} "
@@ -156,6 +162,8 @@ def print_report(results: list[MarkdownCaseResult], summary: dict) -> None:
     print(f"Throughput: {summary['avg_tokens_per_second']:.1f} completion tok/s (avg)")
     print(f"Avg model latency: {summary['avg_execution_time']:.2f}s per case")
     print(f"Total model time: {summary['total_execution_time']:.2f}s")
+    if summary.get("peak_gpu_memory_mb") is not None:
+        print(f"Peak GPU memory: {summary['peak_gpu_memory_mb']:.0f} MiB")
     print(f"Wall-clock run time: {summary['wall_time']:.2f}s")
 
 
