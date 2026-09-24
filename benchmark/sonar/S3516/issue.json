@@ -1,6 +1,6 @@
 {
     "rule": "java:S3516",
     "file": "src/main/java/com/benchmark/shipping/ShippingCostCalculator.java",
-    "line": 5,
+    "line": 15,
     "message": "Refactor this method to not always return the same value."
 }

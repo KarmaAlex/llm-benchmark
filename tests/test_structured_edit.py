@@ -53,8 +53,34 @@ def test_fuzzy_match_with_whitespace_drift():
     match = FuzzyMatcher.find_match(text, search, occurrence=1)
 
     assert match.kind == "fuzzy"
-    assert 0.0 < match.similarity < 1.0
+    # Indentation is ignored when scoring, so this is a perfect fuzzy match.
+    assert 0.0 < match.similarity <= 1.0
     assert "if (flag == true) {" in text[match.start:match.end]
+
+
+def test_fuzzy_match_keeps_closing_line_when_search_is_unindented():
+    text = (
+        "    public boolean canEdit(User user) {\n"
+        "        if (user.isActive()) {\n"
+        "            if (user.hasPermission(\"EDIT\")) {\n"
+        "                return true;\n"
+        "            }\n"
+        "        }\n"
+        "\n"
+        "        return false;\n"
+        "    }\n"
+    )
+    search = "if (user.isActive()) {\n    if (user.hasPermission(\"EDIT\")) {\n        return true;\n    }\n}"
+    match = FuzzyMatcher.find_match(text, search, occurrence=1)
+
+    assert match.kind == "fuzzy"
+    assert text[match.start:match.end] == (
+        "        if (user.isActive()) {\n"
+        "            if (user.hasPermission(\"EDIT\")) {\n"
+        "                return true;\n"
+        "            }\n"
+        "        }\n"
+    )
 
 
 def test_ambiguous_match_is_rejected():
@@ -178,6 +204,96 @@ def test_apply_edits_reports_per_edit_failures_independently(tmp_path: Path):
 
     # The successful edit was still applied to disk despite the other failing.
     assert "int x = 10;" in file_a.read_text(encoding="utf-8")
+
+
+def test_apply_edits_reindents_unindented_fuzzy_replacement(tmp_path: Path):
+    file_a = tmp_path / "A.java"
+    file_a.write_text(
+        "    void run() {\n"
+        "        if (a) {\n"
+        "            if (b) {\n"
+        "                go();\n"
+        "            }\n"
+        "        }\n"
+        "        done();\n"
+        "    }\n",
+        encoding="utf-8",
+    )
+    edits = [EditCall(
+        path="A.java",
+        search="if (a) {\n    if (b) {\n        go();\n    }\n}",
+        replacement="if (a && b) {\n    go();\n}",
+    )]
+
+    result = apply_edits(tmp_path, edits)
+
+    assert result.edit_results[0].match_kind == "fuzzy"
+    assert file_a.read_text(encoding="utf-8") == (
+        "    void run() {\n"
+        "        if (a && b) {\n"
+        "            go();\n"
+        "        }\n"
+        "        done();\n"
+        "    }\n"
+    )
+
+
+def test_apply_edits_reindents_multiline_replacement_of_single_line_exact_match(tmp_path: Path):
+    file_a = tmp_path / "A.java"
+    file_a.write_text(
+        "    int length(User user) {\n"
+        "        String name = user.getName();\n"
+        "        return name.length();\n"
+        "    }\n",
+        encoding="utf-8",
+    )
+    edits = [EditCall(
+        path="A.java",
+        search="String name = user.getName();",
+        replacement="if (user == null) {\n    return 0;\n}\nString name = user.getName();",
+    )]
+
+    apply_edits(tmp_path, edits)
+
+    assert file_a.read_text(encoding="utf-8") == (
+        "    int length(User user) {\n"
+        "        if (user == null) {\n"
+        "            return 0;\n"
+        "        }\n"
+        "        String name = user.getName();\n"
+        "        return name.length();\n"
+        "    }\n"
+    )
+
+
+def test_apply_edits_keeps_already_indented_continuation_lines(tmp_path: Path):
+    file_a = tmp_path / "A.java"
+    file_a.write_text("    void run() {\n        go();\n    }\n", encoding="utf-8")
+    edits = [EditCall(path="A.java", search="go();", replacement="prepare();\n        go();")]
+
+    apply_edits(tmp_path, edits)
+
+    assert file_a.read_text(encoding="utf-8") == "    void run() {\n        prepare();\n        go();\n    }\n"
+
+
+def test_apply_edits_deletes_whole_line_for_empty_replacement(tmp_path: Path):
+    file_a = tmp_path / "A.java"
+    file_a.write_text("    void run() {\n        int unused = 1;\n        go();\n    }\n", encoding="utf-8")
+    edits = [EditCall(path="A.java", search="int unused = 1;", replacement="")]
+
+    apply_edits(tmp_path, edits)
+
+    assert file_a.read_text(encoding="utf-8") == "    void run() {\n        go();\n    }\n"
+
+
+def test_apply_edits_leaves_mid_line_replacement_untouched(tmp_path: Path):
+    file_a = tmp_path / "A.java"
+    file_a.write_text("        if (active == true && ready) {\n", encoding="utf-8")
+    edits = [EditCall(path="A.java", search="active == true", replacement="active")]
+
+    apply_edits(tmp_path, edits)
+
+    assert file_a.read_text(encoding="utf-8") == "        if (active && ready) {\n"
 
 
 def test_generate_diff_produces_standard_unified_diff():

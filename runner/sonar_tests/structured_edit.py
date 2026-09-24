@@ -202,8 +202,14 @@ class AmbiguousMatchError(Exception):
 
 
 def _normalize(text: str) -> str:
-    """Collapse blank-line runs and strip trailing whitespace per line."""
-    lines = [line.rstrip() for line in text.splitlines()]
+    """
+    Collapse blank-line runs and strip leading/trailing whitespace per line.
+
+    Leading whitespace has to go too: models routinely copy code without its
+    indentation, and scoring it would bias the match towards shorter windows
+    (a dropped closing `}` line costs less similarity than its indent adds).
+    """
+    lines = [line.strip() for line in text.splitlines()]
     normalized_lines: list[str] = []
     previous_blank = False
     for line in lines:
@@ -270,7 +276,9 @@ class FuzzyMatcher:
         if not candidates:
             raise NoMatchError("No candidate spans found in the file.")
 
-        candidates.sort(key=lambda c: c[0], reverse=True)
+        # Highest score first; on ties prefer the window closest to the
+        # search's own line count.
+        candidates.sort(key=lambda c: (c[0], -abs((c[2] - c[1]) - search_line_count)), reverse=True)
         best_score = candidates[0][0]
 
         if best_score < FUZZY_SIMILARITY_THRESHOLD:
@@ -310,6 +318,112 @@ class FuzzyMatcher:
             kind="fuzzy",
             similarity=best_score,
         )
+
+
+# ---------------------------------------------------------------------------
+# Fitting the replacement to the matched span
+# ---------------------------------------------------------------------------
+
+def _indent_width(line: str) -> int:
+    return len(line) - len(line.lstrip(" \t"))
+
+
+def _shift_line(line: str, shift: int, indent_char: str) -> str:
+    if shift == 0 or not line.strip():
+        return line
+    width = max(_indent_width(line) + shift, 0)
+    return indent_char * width + line.lstrip(" \t")
+
+
+def _continuation_shift(
+    search_lines: list[str],
+    target_lines: list[str],
+    replacement_lines: list[str],
+    first_shift: int,
+    target_indent: int,
+) -> int:
+    """
+    Indent shift for every replacement line after the first.
+
+    Models sometimes indent the first line differently from the rest (e.g.
+    copying from the first token of a line), so the shift is measured on
+    later lines that appear exactly once in both the search and the matched
+    text. Without any such line, the first line's shift is reused unless the
+    replacement's later lines already sit at or beyond the file's indentation.
+    """
+    def unique_lines(lines: list[str]) -> dict[str, str]:
+        counts: dict[str, int] = {}
+        for line in lines:
+            counts[line.strip()] = counts.get(line.strip(), 0) + 1
+        return {line.strip(): line for line in lines if line.strip() and counts[line.strip()] == 1}
+
+    search_unique = unique_lines(search_lines)
+    target_unique = unique_lines(target_lines)
+    shifts = [
+        _indent_width(target_unique[content]) - _indent_width(line)
+        for content, line in search_unique.items()
+        if content in target_unique
+    ]
+    if shifts:
+        return max(set(shifts), key=shifts.count)
+
+    continuation = [line for line in replacement_lines if line.strip()]
+    if continuation and all(_indent_width(line) >= target_indent for line in continuation):
+        return 0
+    return first_shift
+
+
+def fit_replacement(file_text: str, match: MatchResult, search: str, replacement: str) -> tuple[int, int, str]:
+    """
+    Adapt `replacement` to the span it replaces and return the (start, end,
+    text) to splice into `file_text`.
+
+    Models tend to write `search`/`replacement` without the file's
+    indentation. A fuzzy match covers whole lines (indent and trailing
+    newline included) and an exact match may start after the line's indent,
+    so the raw replacement would otherwise lose indentation, get glued to the
+    following line, or leave indent-only lines behind on deletion.
+    Replacements that start mid-line (after non-whitespace) are left as-is.
+    """
+    start, end = match.start, match.end
+    line_start = file_text.rfind("\n", 0, start) + 1
+    prefix = file_text[line_start:start]
+    if prefix.strip():
+        return start, end, replacement
+
+    if not replacement.strip():
+        # Deleting code: take out the whole line(s) if nothing else is on them.
+        if not file_text[start:end].endswith("\n"):
+            line_end = file_text.find("\n", end)
+            line_end = len(file_text) if line_end == -1 else line_end + 1
+            if file_text[end:line_end].strip():
+                return start, end, replacement
+            end = line_end
+        return line_start, end, ""
+
+    search_lines = search.split("\n")
+    target_lines = file_text[line_start:end].split("\n")
+    search_first = next((line for line in search_lines if line.strip()), "")
+    target_first = next((line for line in target_lines if line.strip()), "")
+    target_indent = _indent_width(target_first)
+    first_shift = target_indent - _indent_width(search_first)
+    indent_char = "\t" if target_first.startswith("\t") else " "
+
+    replacement_lines = replacement.split("\n")
+    rest_shift = _continuation_shift(
+        search_lines[1:], target_lines[1:], replacement_lines[1:], first_shift, target_indent,
+    )
+
+    # The first replacement line is inserted after `prefix`, which already
+    # supplies that much of its indentation.
+    fitted = [_shift_line(replacement_lines[0], first_shift - len(prefix), indent_char)]
+    fitted += [_shift_line(line, rest_shift, indent_char) for line in replacement_lines[1:]]
+    text = "\n".join(fitted)
+
+    if match.kind == "fuzzy" and file_text[start:end].endswith("\n") and not text.endswith("\n"):
+        text += "\n"
+
+    return start, end, text
 
 
 # ---------------------------------------------------------------------------
@@ -380,9 +494,8 @@ def apply_edits(project_directory: Path, edits: list[EditCall]) -> EditApplyResu
             ))
             continue
 
-        working_files[edit.path] = (
-            current_text[:match.start] + edit.replacement + current_text[match.end:]
-        )
+        start, end, text = fit_replacement(current_text, match, edit.search, edit.replacement)
+        working_files[edit.path] = current_text[:start] + text + current_text[end:]
         outcomes.append(EditOutcome(
             path=edit.path,
             applied=True,
