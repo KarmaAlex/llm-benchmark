@@ -1,21 +1,25 @@
 import argparse
 import shutil
-from dataclasses import replace
 from pathlib import Path
 
-from runner.sonar_tests.analysis import analyze_case
-from runner.sonar_tests.compiler import Compiler
-from runner.sonar_tests.edit_pipeline import PROMPT_NAME_BY_EDIT_MODE, apply_model_response
-from runner.sonar_tests.sonar_server import SonarServer
-from runner.sonar_tests.test_runner import TestRunner
-from runner.sonar_tests.workspace import Workspace
-from runner.stats import tokens_per_second
-from runner.structured_edit import EDIT_FILE_TOOL_SCHEMA
-from runner.filesystem.benchmark_loader import BenchmarkLoader
-from runner.filesystem.config_loader import ConfigLoader
-from runner.filesystem.prompt_loader import PromptLoader
-from runner.prompt_builder import PromptBuilder
+from runner.cli.arguments import (
+    add_config_argument,
+    add_device_argument,
+    add_edit_mode_argument,
+    add_sonar_argument,
+)
+from runner.cli.loading import load_model_config
+from runner.cli.output import print_response_stats
 from runner.providers.factory import ProviderFactory
+from runner.sonar_tests.analysis import analyze_case
+from runner.sonar_tests.pipeline import (
+    apply_to_workspace,
+    build_chat_prompt,
+    load_case,
+    load_prompt,
+    validate_case,
+)
+from runner.sonar_tests.sonar_server import SonarServer
 
 
 parser = argparse.ArgumentParser(
@@ -27,32 +31,11 @@ parser.add_argument(
     default="S1643",
     help="Case id under benchmark/sonar/ to run (default: S1643).",
 )
-parser.add_argument(
-    "--config",
-    default="qwen2.5-coder-7b-q4",
-    help="Model config name under configs/ to use (default: qwen2.5-coder-7b-q4).",
-)
-parser.add_argument(
-    "--edit-mode",
-    choices=["diff", "structured", "toolcall"],
-    default="diff",
-    help=(
-        "How the model expresses its fix: 'diff' (default, unchanged unified-diff "
-        "behavior), 'structured' (line-number-free JSON edit list parsed from text), "
-        "or 'toolcall' (native tool/function calling, requires supports_tools in the "
-        "model config)."
-    ),
-)
-parser.add_argument(
-    "--device",
-    choices=["cuda", "cpu"],
-    default="cuda",
-    help="Run local (llama.cpp) models on the GPU (default) or force CPU-only.",
-)
-parser.add_argument(
-    "--sonar",
-    action=argparse.BooleanOptionalAction,
-    default=True,
+add_config_argument(parser, default="qwen2.5-coder-7b-q4")
+add_edit_mode_argument(parser)
+add_device_argument(parser)
+add_sonar_argument(
+    parser,
     help=(
         "After compiling and testing, analyze the patched project with a real "
         "SonarQube and report whether the issue is gone and what it cost "
@@ -61,29 +44,11 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-case = BenchmarkLoader.load(
-    Path("sonar") / args.case
-)
+case = load_case(args.case)
 
-config = ConfigLoader.load(args.config)
-config = ConfigLoader.apply_device(config, args.device)
+config = load_model_config(args.config, args.device, args.edit_mode)
 
-if args.edit_mode == "toolcall" and not config.supports_tools:
-    print(
-        f"Model config '{config.name}' does not have supports_tools "
-        "enabled. Use --edit-mode structured for this model instead."
-    )
-    raise SystemExit(1)
-
-prompt = PromptLoader.load(PROMPT_NAME_BY_EDIT_MODE[args.edit_mode])
-
-chat_prompt = PromptBuilder.build(
-    prompt,
-    case,
-)
-
-if args.edit_mode == "toolcall":
-    chat_prompt = replace(chat_prompt, tools=[EDIT_FILE_TOOL_SCHEMA])
+chat_prompt = build_chat_prompt(load_prompt(args.edit_mode), case, args.edit_mode)
 
 print(f"Prompt:\n{chat_prompt}\n\n")
 
@@ -93,15 +58,7 @@ response = provider.generate(
     chat_prompt
 )
 
-print(
-    f"Tokens: {response.prompt_tokens} prompt + {response.completion_tokens} "
-    f"completion = {response.prompt_tokens + response.completion_tokens} total "
-    f"(finish_reason={response.finish_reason})"
-)
-print(
-    f"Latency: {response.latency:.2f}s "
-    f"({tokens_per_second(response.completion_tokens, response.latency):.1f} tok/s)"
-)
+print_response_stats(response)
 
 run_directory = Path(
     "results/test"
@@ -115,14 +72,9 @@ run_directory.mkdir(
     exist_ok=True,
 )
 
-project_directory = Workspace.create(
-    case.project_path,
-    run_directory / "project",
-)
-
 print(f"Response:\n{response.content}")
 
-outcome = apply_model_response(args.edit_mode, project_directory, response)
+outcome = apply_to_workspace(case, args.edit_mode, response, run_directory)
 
 print(f"Applied: {outcome.applied}")
 
@@ -140,35 +92,32 @@ if not outcome.applied:
 
 print(f"Diff:\n{outcome.diff}")
 
-compilation = Compiler.compile(
-    project_directory
-)
+validation = validate_case(run_directory)
 
 print(
-    f"Compilation successful: {compilation.compiled}"
+    f"Compilation successful: {validation['compiled']}"
 )
 
 print(
     f"Compilation time: "
-    f"{compilation.execution_time:.2f}s"
+    f"{validation['compile_time']:.2f}s"
 )
 
-if compilation.compiled:
-    test_execution = TestRunner.run(
-        project_directory
-    )
+if validation["compiled"]:
+    tests_run = validation["tests_run_count"]
+    failures = validation["tests_failed"]
+    errors = validation["tests_errored"]
 
     print(
-        f"Tests ran: {test_execution.ran}, passed: {test_execution.passed} "
-        f"({test_execution.tests_run - test_execution.failures - test_execution.errors}/"
-        f"{test_execution.tests_run} passing, {test_execution.failures} failures, "
-        f"{test_execution.errors} errors, {test_execution.skipped} skipped)"
+        f"Tests ran: {validation['tests_ran']}, passed: {validation['tests_passed']} "
+        f"({tests_run - failures - errors}/{tests_run} passing, {failures} failures, "
+        f"{errors} errors, {validation['tests_skipped']} skipped)"
     )
     print(
-        f"Test execution time: {test_execution.execution_time:.2f}s"
+        f"Test execution time: {validation['test_time']:.2f}s"
     )
 
-if compilation.compiled and args.sonar:
+if validation["compiled"] and args.sonar:
     analysis = analyze_case(
         args.case,
         run_directory,

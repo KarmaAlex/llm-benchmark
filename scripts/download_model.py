@@ -8,7 +8,7 @@ file into models/, so a config's `model:` path resolves without any manual
 downloading.
 
 Gated/private repos need a Hugging Face token. If HF_TOKEN is set in the
-project's .env (see runner/env.py), it's picked up automatically; otherwise
+project's .env (see runner/filesystem/env.py), it's picked up automatically; otherwise
 the download proceeds unauthenticated, which is all public GGUF repos need.
 
 Examples:
@@ -38,7 +38,7 @@ import shutil
 from huggingface_hub import hf_hub_download, list_repo_files
 from huggingface_hub.errors import HfHubHTTPError
 
-from runner.env import load_env
+from runner.filesystem.env import load_env
 from runner.filesystem.paths import MODELS_DIR
 
 GGUF_SUFFIX = ".gguf"

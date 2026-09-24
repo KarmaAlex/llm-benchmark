@@ -114,7 +114,7 @@ python -m scripts.download_model bartowski/Qwen2.5-Coder-7B-Instruct-GGUF Qwen2.
     --output-name qwen2.5-coder-7b-instruct-q4_k_m.gguf
 ```
 
-A file that already exists at the destination is left alone (`--force` to re-download); `--revision` pins a branch/tag/commit. Gated or private repos need a token: set `HF_TOKEN` in `.env` (loaded the same way as `OPENAI_API_KEY`, see `runner/env.py`) and it's picked up automatically, or pass `--token` explicitly to override it for one call. Public GGUF repos generally don't need a token but you may be rate limited or the download may fail if it is particularly large.
+A file that already exists at the destination is left alone (`--force` to re-download); `--revision` pins a branch/tag/commit. Gated or private repos need a token: set `HF_TOKEN` in `.env` (loaded the same way as `OPENAI_API_KEY`, see `runner/filesystem/env.py`) and it's picked up automatically, or pass `--token` explicitly to override it for one call. Public GGUF repos generally don't need a token but you may be rate limited or the download may fail if it is particularly large.
 
 ## Reading a run back
 
@@ -132,7 +132,7 @@ A chat prompt is assembled from three pieces, all under `prompts/`:
 
 - **`system_v1.md`** — the shared system message for every suite: be an expert software engineering assistant, follow the task instructions exactly, and output nothing but what was asked for. This is the only part that doesn't vary per case.
 - **A user-prompt template** — one file per suite/edit-mode combination (`markdown_v1.md`, `sonar_v2.md`, `sonar_structured_v1.md`, `sonar_toolcall_v1.md`), containing the task framing, the output-format contract, and `{{placeholder}}` tokens.
-- **The benchmark case's own data** — `PromptBuilder.build()` (`runner/prompt_builder.py`) substitutes each placeholder: every key in the case's `metadata.json` and every other file in the case directory (`issue.json` → `{{issue}}`, `rule.md` → `{{rule}}`, etc.) is available by its filename stem, JSON-encoded if it isn't already a string. `{{files}}` is special-cased to concatenate every file listed in `metadata["files"]`, each rendered with `### File: <path>` headers; for sonar cases these are **line-numbered** (`ProjectFileLoader`, blank lines shown as `<BLANK>`) so the model can cite a precise location without the line numbers themselves being part of any diff it produces. Any placeholder left unresolved after substitution raises an error rather than silently sending `{{...}}` to the model.
+- **The benchmark case's own data** — `PromptBuilder.build()` (`runner/core/prompt_builder.py`) substitutes each placeholder: every key in the case's `metadata.json` and every other file in the case directory (`issue.json` → `{{issue}}`, `rule.md` → `{{rule}}`, etc.) is available by its filename stem, JSON-encoded if it isn't already a string. `{{files}}` is special-cased to concatenate every file listed in `metadata["files"]`, each rendered with `### File: <path>` headers; for sonar cases these are **line-numbered** (`ProjectFileLoader`, blank lines shown as `<BLANK>`) so the model can cite a precise location without the line numbers themselves being part of any diff it produces. Any placeholder left unresolved after substitution raises an error rather than silently sending `{{...}}` to the model.
 
 Because template and data are cleanly separated, adding a benchmark case never touches prompt code — dropping files into `benchmark/<suite>/<case_id>/` is enough.
 

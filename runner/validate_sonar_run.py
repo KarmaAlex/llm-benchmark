@@ -15,30 +15,15 @@ Usage:
 """
 
 import argparse
-import json
 import time
 from dataclasses import asdict, replace
-from pathlib import Path
 
-from runner.filesystem.paths import RESULTS_DIR
-from runner.run_all_sonar import (
-    SonarCaseResult,
-    compute_summary,
-    print_report,
-    validate_case,
-)
-
-
-def resolve_run_directory(run_id: str) -> Path:
-    candidate = Path(run_id)
-    if candidate.is_dir():
-        return candidate
-
-    candidate = RESULTS_DIR / run_id
-    if candidate.is_dir():
-        return candidate
-
-    raise SystemExit(f"No run directory found for '{run_id}' (looked for it directly and under {RESULTS_DIR})")
+from runner.cli.arguments import add_run_id_argument
+from runner.cli.loading import open_run
+from runner.filesystem.results_manager import ResultsManager
+from runner.models.sonar_case_result import SonarCaseResult
+from runner.sonar_tests.pipeline import validate_case
+from runner.sonar_tests.report import compute_summary, print_report
 
 
 def main() -> None:
@@ -48,18 +33,10 @@ def main() -> None:
             "run directory, without calling the model again."
         )
     )
-    parser.add_argument(
-        "run_id",
-        help="Run directory name under results/ (or a path to it directly).",
-    )
+    add_run_id_argument(parser)
     args = parser.parse_args()
 
-    run_directory = resolve_run_directory(args.run_id)
-    report_path = run_directory / "report.json"
-    if not report_path.exists():
-        raise SystemExit(f"No report.json found in {run_directory}")
-
-    report = json.loads(report_path.read_text(encoding="utf-8"))
+    run_directory, report = open_run(args.run_id)
 
     results: list[SonarCaseResult] = []
     validation_start = time.perf_counter()
@@ -87,7 +64,7 @@ def main() -> None:
     report["summary"] = summary
     report["cases"] = [asdict(r) for r in results]
     report["validated"] = True
-    report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    report_path = ResultsManager.write_report(run_directory, report)
     print(f"\nUpdated report written to {report_path}")
 
 

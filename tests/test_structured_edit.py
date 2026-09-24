@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from runner.structured_edit import (
+from runner.sonar_tests.structured_edit import (
     AmbiguousMatchError,
     EditCall,
     FuzzyMatcher,

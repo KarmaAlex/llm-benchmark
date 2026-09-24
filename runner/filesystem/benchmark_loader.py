@@ -7,6 +7,15 @@ from runner.filesystem.project_file_loader import ProjectFileLoader
 
 class BenchmarkLoader:
     @staticmethod
+    def discover(suite: str) -> list[str]:
+        """Every case id under benchmark/<suite>/, sorted."""
+        suite_dir = BENCHMARK_DIR / suite
+        return sorted(
+            p.name for p in suite_dir.iterdir()
+            if p.is_dir() and (p / "metadata.json").exists()
+        )
+
+    @staticmethod
     def load(case_directory: Path) -> BenchmarkCase:
         full_path = BENCHMARK_DIR / case_directory
         metadata_path = full_path / "metadata.json"

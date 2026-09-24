@@ -3,7 +3,7 @@ from pathlib import Path
 from runner.filesystem.benchmark_loader import BenchmarkLoader
 from runner.filesystem.config_loader import ConfigLoader
 from runner.filesystem.prompt_loader import PromptLoader
-from runner.prompt_builder import PromptBuilder
+from runner.core.prompt_builder import PromptBuilder
 from runner.providers.factory import ProviderFactory
 
 case = BenchmarkLoader.load(

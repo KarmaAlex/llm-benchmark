@@ -5,7 +5,7 @@ from typing import cast
 from llama_cpp import Llama
 from openai.types.chat import ChatCompletion
 
-from runner.gpu_memory import get_gpu_memory_used_mb
+from runner.providers.gpu_memory import get_gpu_memory_used_mb
 from runner.models.chat_prompt import ChatPrompt
 from runner.models.model_config import ModelConfig
 from runner.models.model_response import ModelResponse

@@ -2,7 +2,7 @@
 The analysis phase: grade already-generated, already-compiled case
 workspaces against a real SonarQube.
 
-Shaped like validate_case() in run_all_sonar.py - it returns a dict of
+Shaped like validate_case() in sonar_tests/pipeline.py - it returns a dict of
 SonarCaseResult field updates suitable for dataclasses.replace() - so the
 inline pipeline and the standalone analyze_sonar_run.py entry point share
 one implementation.

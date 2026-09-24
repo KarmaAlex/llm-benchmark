@@ -1,8 +1,8 @@
 """
 Shared logic for turning a model's response into an applied change on disk,
-regardless of which --edit-mode produced it. Used by both the single-case
-runner (main_sonar.py) and the batch runner (run_all_sonar.py) so the two
-scripts can't drift apart.
+regardless of which --edit-mode produced it. Used by the case pipeline
+(sonar_tests/pipeline.py) that both the single-case runner (main_sonar.py)
+and the batch runners share, so the scripts can't drift apart.
 """
 
 from dataclasses import dataclass
@@ -10,7 +10,7 @@ from pathlib import Path
 
 from runner.models.model_response import ModelResponse
 from runner.sonar_tests.patch_applier import PatchApplier
-from runner.structured_edit import (
+from runner.sonar_tests.structured_edit import (
     StructuredEditParseError,
     StructuredEditParser,
     apply_edits,
