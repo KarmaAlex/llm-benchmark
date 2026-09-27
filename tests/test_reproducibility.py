@@ -224,6 +224,42 @@ def test_aggregate_run_reads_repetitions_from_disk(tmp_path, capsys):
     assert "md002 - flaky, passed 1/3" in out
 
 
+def test_generate_only_sonar_repetitions_are_pending_not_graded(tmp_path, capsys):
+    # run_all_reproducibility.py --no-sonar writes exactly this shape: no
+    # compile/test happened, so there is nothing to grade yet.
+    for rep in (1, 2):
+        _write_rep(tmp_path, "sonar", rep, {
+            "config": "cfg-sonar", "sonar_analyzed": False, "validated": False,
+            "summary": {}, "cases": [asdict(sonar("d1", applied=True, tests_passed=False))],
+        })
+
+    result = agg.aggregate_run(tmp_path, {"repetitions": 2})
+
+    assert "sonar" not in result["suites"]
+    assert result["pending_validation"] == ["sonar"]
+    json.dumps(result)  # serialisable as-is
+
+    print_reproducibility_report(result)
+    out = capsys.readouterr().out
+    assert "generated with --no-sonar, not yet validated" in out
+    assert "validate_sonar_run" in out
+
+
+def test_sonar_repetitions_are_graded_once_validated(tmp_path):
+    # validate_sonar_run.py sets "validated": True in place once it has
+    # compiled and tested a generate-only repetition.
+    for rep in (1, 2):
+        _write_rep(tmp_path, "sonar", rep, {
+            "config": "cfg-sonar", "sonar_analyzed": False, "validated": True,
+            "summary": {}, "cases": [asdict(sonar("d1", applied=True, tests_passed=True))],
+        })
+
+    result = agg.aggregate_run(tmp_path, {})
+
+    assert result["pending_validation"] == []
+    assert result["suites"]["sonar"]["criterion"] == SONAR_TESTS_PASSED
+
+
 def test_resolve_config_name_prefers_suite_variant():
     # Both exist in configs/: qwen2.5-coder-7b-q4.yaml and -markdown.yaml.
     assert resolve_config_name("qwen2.5-coder-7b-q4", "markdown") == "qwen2.5-coder-7b-q4-markdown"

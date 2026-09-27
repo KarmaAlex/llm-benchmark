@@ -92,8 +92,14 @@ def _print_details(cases: list[dict], most_unstable: list[str]) -> None:
 
 
 def print_reproducibility_report(aggregate: dict) -> None:
-    if not aggregate["suites"]:
+    if not aggregate["suites"] and not aggregate.get("pending_validation"):
         print("No completed repetitions to aggregate.")
         return
     for suite_aggregate in aggregate["suites"].values():
         print_suite(suite_aggregate)
+    for suite in aggregate.get("pending_validation", []):
+        print(
+            f"\n{suite}: generated with --no-sonar, not yet validated - run "
+            "`python -m runner.validate_sonar_run <rep-directory>` on each "
+            "repetition, then re-run with --aggregate-only to grade it."
+        )

@@ -17,6 +17,11 @@ The aggregate is always rebuilt from those reports, so `--aggregate-only`
 re-grades a finished (or interrupted) run without calling the model. See
 runner/reproducibility/aggregate.py for the classification criteria.
 
+With --no-sonar, sonar repetitions only generate (no mvn compile/test
+either, matching run_all_sonar_generate.py's "validated": false convention):
+run `validate_sonar_run` on each `sonar/rep-NN/` directory whenever
+convenient, then `--aggregate-only` to grade the run on its tests.
+
 Usage:
     python -m runner.run_all_reproducibility --model qwen2.5-coder-7b-q4
     python -m runner.run_all_reproducibility --model gpt5mini --repetitions 5 --suites markdown
@@ -25,6 +30,8 @@ Usage:
 
 import argparse
 import gc
+import time
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -35,6 +42,7 @@ from runner.cli.arguments import (
     add_sonar_argument,
 )
 from runner.cli.loading import load_model_config, resolve_config_name
+from runner.core.batch import run_cases
 from runner.filesystem.results_manager import ResultsManager
 from runner.markdown_tests import pipeline as markdown_pipeline
 from runner.markdown_tests import report as markdown_report
@@ -80,9 +88,11 @@ def parse_args() -> argparse.Namespace:
     add_sonar_argument(
         parser,
         help=(
-            "Run the SonarQube analysis phase on every sonar repetition, so "
-            "'pass' means a clean fix (default: on). With --no-sonar, a sonar "
-            "case passes when its tests pass."
+            "Compile, test and run the SonarQube analysis phase on every "
+            "sonar repetition, so 'pass' means a clean fix (default: on). "
+            "With --no-sonar, repetitions only generate - no compile/test "
+            "either - and are graded later by running validate_sonar_run "
+            "on each repetition and re-aggregating with --aggregate-only."
         ),
     )
     add_cases_argument(parser)
@@ -162,19 +172,46 @@ def run_sonar_repetitions(
 
     for rep in range(1, repetitions + 1):
         rep_directory = repetition_directory(suite_directory, rep, repetitions, "sonar")
-        results, wall_time = sonar_pipeline.run_suite(
-            edit_mode, provider, prompt, rep_directory, case_ids, sonar
-        )
-        summary = sonar_report.compute_summary(results, wall_time)
 
-        payload = sonar_report.report_payload(config.name, edit_mode, sonar, results, summary)
+        if sonar:
+            results, wall_time = sonar_pipeline.run_suite(
+                edit_mode, provider, prompt, rep_directory, case_ids, sonar
+            )
+            summary = sonar_report.compute_summary(results, wall_time)
+            payload = sonar_report.report_payload(config.name, edit_mode, sonar, results, summary)
+            outcome = f"clean fixes {summary['clean_fix_count']}/{summary['total_cases']}"
+        else:
+            # No SonarQube analysis requested, so there is no reason to pay
+            # for mvn compile/test here either: generate only, and leave
+            # that slower phase to validate_sonar_run on this rep directory
+            # whenever it's convenient (a different machine, later, ...).
+            results, wall_time = generate_sonar_repetition(
+                provider, prompt, rep_directory, case_ids, edit_mode
+            )
+            summary = sonar_report.compute_generation_summary(results, wall_time)
+            payload = {
+                "config": config.name,
+                "edit_mode": edit_mode,
+                "sonar_analyzed": False,
+                "validated": False,
+                "summary": summary,
+                "cases": [asdict(r) for r in results],
+            }
+            outcome = f"applied {summary['applied_count']}/{summary['total_cases']} (not yet validated)"
+
         ResultsManager.write_report(rep_directory, {**payload, "repetition": rep})
-        outcome = (
-            f"clean fixes {summary['clean_fix_count']}/{summary['total_cases']}"
-            if sonar else
-            f"tests passed {summary['tests_passed_count']}/{summary['total_cases']}"
-        )
         print(f"sonar rep {rep}/{repetitions}: {outcome} in {wall_time:.1f}s")
+
+
+def generate_sonar_repetition(provider, prompt, rep_directory: Path, case_ids, edit_mode: str):
+    run_start = time.perf_counter()
+    results = run_cases(
+        case_ids or sonar_pipeline.discover_cases(),
+        lambda case_id: sonar_pipeline.generate_case(case_id, edit_mode, provider, prompt, rep_directory),
+        lambda case_id, error: sonar_pipeline.failed_result(case_id, edit_mode, error),
+        verb="Generating",
+    )
+    return results, time.perf_counter() - run_start
 
 
 def repetition_directory(suite_directory: Path, rep: int, repetitions: int, suite: str) -> Path:

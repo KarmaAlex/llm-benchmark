@@ -218,12 +218,19 @@ def _rep_number(directory: Path) -> int:
     return int(directory.name.removeprefix("rep-"))
 
 
+def _needs_validation(suite: str, reports: list[dict]) -> bool:
+    """True for a sonar suite whose repetitions were generated with
+    --no-sonar and have not been through validate_sonar_run yet (see
+    run_all_reproducibility.py) - there is nothing to grade until then."""
+    return suite == "sonar" and all(report.get("validated") is False for report in reports)
+
+
 def aggregate_suite_directory(suite: str, suite_directory: Path) -> dict | None:
     reports = [
         (_rep_number(d), ResultsManager.load_report(d))
         for d in repetition_directories(suite_directory)
     ]
-    if not reports:
+    if not reports or _needs_validation(suite, [report for _rep, report in reports]):
         return None
 
     if suite == "markdown":
@@ -243,6 +250,16 @@ def aggregate_suite_directory(suite: str, suite_directory: Path) -> dict | None:
     return aggregate_suite(suite, criterion, repetitions)
 
 
+def _pending_validation(run_directory: Path) -> list[str]:
+    pending = []
+    for suite in SUITES:
+        suite_directory = run_directory / suite
+        reports = [ResultsManager.load_report(d) for d in repetition_directories(suite_directory)]
+        if reports and _needs_validation(suite, reports):
+            pending.append(suite)
+    return pending
+
+
 def aggregate_run(run_directory: Path, settings: dict | None = None) -> dict:
     return {
         "settings": settings or {},
@@ -251,4 +268,7 @@ def aggregate_run(run_directory: Path, settings: dict | None = None) -> dict:
             for suite in SUITES
             if (aggregate := aggregate_suite_directory(suite, run_directory / suite)) is not None
         },
+        # Suites generated with --no-sonar: nothing to grade until
+        # validate_sonar_run has compiled and tested each repetition.
+        "pending_validation": _pending_validation(run_directory),
     }
