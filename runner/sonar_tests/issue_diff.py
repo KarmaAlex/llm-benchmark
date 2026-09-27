@@ -9,13 +9,15 @@ Two questions, both answered here and nowhere else:
 
 Both comparisons are deliberately line-independent. Any patch shifts line
 numbers, so matching on lines would report the whole file as "new". What
-identifies a finding here is (rule, file, message); lines are carried along
-for the report but never participate in matching.
+identifies a finding here is (rule, file, message shape - see
+_message_shape); lines are carried along for the report but never
+participate in matching.
 
 No server access, no I/O - everything in this module is a pure function of
 the two finding lists, which is what makes it testable without podman.
 """
 
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 
@@ -78,9 +80,26 @@ def normalize_all(findings: list[dict], project_key: str) -> list[dict]:
     return [normalize(finding, project_key) for finding in findings]
 
 
+_QUOTED = re.compile(r"\"[^\"]*\"|'[^']*'")
+_NUMBER = re.compile(r"\d+")
+
+
+def _message_shape(message: str) -> str:
+    """A message with its quoted identifiers and numbers blanked out.
+
+    Many messages embed a name or a metric that a fix legitimately changes
+    without touching the underlying finding: an unclosed `Statement` that
+    becomes an unclosed `PreparedStatement` (S2095), or a complexity that
+    drops from 28 to 17 but is still over the limit (S3776). Keeping those
+    in the identity would report the same pre-existing finding as new. The
+    cost is that swapping one finding for a different one of the same rule
+    in the same file goes unnoticed - an increase in count is still caught."""
+    return _NUMBER.sub("#", _QUOTED.sub('"_"', message))
+
+
 def _identity(finding: dict) -> tuple[str, str, str]:
     """What makes two findings "the same finding" across an edit."""
-    return (finding.get("rule", ""), finding.get("file", ""), finding.get("message", ""))
+    return (finding.get("rule", ""), finding.get("file", ""), _message_shape(finding.get("message", "")))
 
 
 def compare(expected: dict, baseline: list[dict], after: list[dict]) -> SonarComparison:

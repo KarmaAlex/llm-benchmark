@@ -69,6 +69,36 @@ def test_extra_occurrence_of_an_existing_rule_is_new():
     assert comparison.new_issues[0]["rule"] == "java:S1192"
 
 
+def test_renamed_identifier_in_preexisting_finding_is_not_new():
+    """S2077: switching to PreparedStatement renames the pre-existing
+    unclosed-resource finding, it doesn't add one."""
+    before = finding("java:S2095", EXPECTED["file"], 17,
+                     'Use try-with-resources or close this "Statement" in a "finally" clause.')
+    after = finding("java:S2095", EXPECTED["file"], 17,
+                    'Use try-with-resources or close this "PreparedStatement" in a "finally" clause.')
+    comparison = compare(EXPECTED, [target(), before], [after])
+    assert comparison.new_issues == []
+    assert comparison.target_resolved
+
+
+def test_changed_metric_in_remaining_target_is_not_also_new():
+    expected = {"rule": "java:S3776", "file": EXPECTED["file"], "line": 7, "message": ""}
+    before = finding("java:S3776", EXPECTED["file"], 7,
+                     "Refactor this method to reduce its Cognitive Complexity from 28 to the 15 allowed.")
+    after = dict(before, message="Refactor this method to reduce its Cognitive Complexity from 17 to the 15 allowed.")
+    comparison = compare(expected, [before], [after])
+    assert not comparison.target_resolved
+    assert comparison.new_issues == []
+
+
+def test_new_unused_import_is_still_new_next_to_renamed_finding():
+    before = finding("java:S2095", EXPECTED["file"], 17, 'close this "Statement"')
+    renamed = dict(before, message='close this "PreparedStatement"')
+    unused = finding("java:S1128", EXPECTED["file"], 6, "Remove this unused import 'java.sql.Statement'.")
+    comparison = compare(EXPECTED, [target(), before], [renamed, unused])
+    assert comparison.new_issues == [unused]
+
+
 def test_identical_duplicates_are_counted_not_deduplicated():
     dup = finding("java:S1192", EXPECTED["file"], 3, "Define a constant")
     comparison = compare(EXPECTED, [], [dup, dict(dup), dict(dup)])

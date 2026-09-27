@@ -9,7 +9,8 @@ Return **only** a single JSON object with exactly these three keys:
   `{"text": "...", "done": true}` objects (`done` is `true` for `[x]`, `false` for `[ ]`).
 - `"decisions"`: every entry from the "Decisions" section, as an array of
   `{"decision": "...", "owner": "...", "due": "..."}` objects, where "decision" is
-  only the decision text (no "Decision:"/"Owner:"/"Due:" labels).
+  only the decision text including its trailing period (no "Decision:"/"Owner:"/"Due:"
+  labels), and "owner" and "due" have no trailing period.
 
 Example structure (not the real values):
 
