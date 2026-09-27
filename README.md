@@ -89,7 +89,9 @@ All commands run as `python -m runner.<script>` from the repo root.
 | `validate_sonar_run <run_id>` | Re-runs compile + test for an already-generated run directory (from `run_all_sonar_generate`), without calling the model again, and updates that run's `report.json` in place (`"validated": true`). |
 | `analyze_sonar_run <run_id> [--cases ...]` | Runs the SonarQube analysis phase for an already-generated *and* compiled run directory, without calling the model again, and updates that run's `report.json` in place (`"sonar_analyzed": true`). |
 
-`run_all_sonar` performs the analysis phase inline by default; pass `--no-sonar` to skip it and run `analyze_sonar_run` later instead.
+| `run_all_reproducibility --model <name> [--repetitions N] [--suites ...]` | Runs both suites N times (default 10) with the same model and reports, per case, whether the responses changed between repetitions and how often the case passed. See *Reproducibility runs* below. |
+
+`run_all_sonar` performs the analysis phase inline by default; pass `--no-sonar` to skip it and run `analyze_sonar_run` later instead. `run_all_markdown`, `run_all_sonar` and `run_all_reproducibility` all take `--cases <id> ...` to run a subset.
 
 Standalone scripts run as `python -m scripts.<script>`:
 
@@ -167,3 +169,46 @@ Every `run_all_*` invocation writes `results/<timestamp>/report.json` with `{"co
 **Markdown** — per case: `matched` (bool), `execution_time`, `prompt_tokens`, `completion_tokens`, `tokens_per_second`, `finish_reason`, `parse_error`/`error`, the raw `response_text` and `parsed_output`. Aggregate summary adds: `matched_rate`, total/average token counts and throughput, `total_execution_time`/`wall_time`, and a `by_difficulty` breakdown (matched/total per difficulty level).
 
 **Sonar** — per case: `applied`, `compiled`, `tests_ran`, `tests_passed`, `tests_run_count`/`tests_failed`/`tests_errored`, `execution_time`, `compile_time`, `test_time`, token counts, `tokens_per_second`, plus the generated `response_text`/`diff`. From the analysis phase: `sonar_analyzed`, `target_resolved`, `new_issues_count`, `new_issues` (full detail per finding), `remaining_target_issues`, `baseline_issue_count`/`after_issue_count`, `sonar_time`, and `sonar_error` (why a case was skipped, e.g. it never compiled). Aggregate summary adds: `applied_rate`, `compiled_rate`, `tests_passed_rate` (computed over compiled cases only, since a case that fails to compile can't run tests), `resolved_rate` (over analyzed cases, for the same reason), `clean_fix_rate` (over all cases — this is the headline number), `new_issues_total`, plus the same token/timing totals as markdown. `run_all_sonar_generate` writes a reduced summary (token/throughput/applied stats only, no compile/test fields) until `validate_sonar_run` fills the rest in.
+
+## Reproducibility runs
+
+`python -m runner.run_all_reproducibility --model <name>` runs the markdown and sonar suites `--repetitions` times (default 10). Each suite uses `<name>-markdown` / `<name>-sonar` when that config exists, otherwise `<name>` itself; `--markdown-config` / `--sonar-config` pick one explicitly. The model is loaded once per suite and reused for every repetition, and llama.cpp configs pass their `seed` on every request, so a case's output doesn't depend on how many calls ran before it. `--edit-mode`, `--device`, `--no-sonar` and `--cases` behave as in the other runners.
+
+```
+results/<timestamp>/
+    reproducibility.json          settings + per-suite, per-case aggregate
+    markdown/rep-01/report.json   a normal run_all_markdown report
+    sonar/rep-01/report.json      a normal run_all_sonar report (+ workspaces, sonar-logs)
+```
+
+Every `rep-NN/` directory is an ordinary run, so `analysis.report`, `validate_sonar_run` and `analyze_sonar_run` work on it. The aggregate is always rebuilt from those reports: `--aggregate-only <run_id>` re-grades a finished or interrupted run without calling the model.
+
+Each case/repetition is compared at three levels:
+
+| Level | Markdown | Sonar |
+|---|---|---|
+| **raw** | the exact response text | the response text plus the tool calls (toolcall mode) |
+| **effective** | the parsed JSON, canonicalised (key order and code fences ignored) | the applied diff, with line endings and trailing whitespace normalised; `<not-applied>` if nothing applied |
+| **verdict** | `matched` | `clean_fix`; `tests_passed` when the run used `--no-sonar` |
+
+Each case gets the first classification that matches:
+
+- `harness-error`: a repetition failed before the model answered, or a sonar case that passed its tests got no SonarQube verdict. Those repetitions are left out of everything else (`valid_classification` says how the rest behaved), so infrastructure problems aren't counted as model nondeterminism.
+- `identical`: every raw response is byte-identical.
+- `equivalent`: the raw responses differ, but the effective output is the same.
+- `outcome-stable`: the effective outputs differ, but every repetition got the same verdict.
+- `flaky`: the verdict changes between repetitions.
+
+Per case the aggregate records:
+- pass count and rate, and how many repetitions stopped at each pipeline stage;
+- the number of distinct raw and effective outputs, and the agreement rate (share of repetitions giving the most common output);
+- the completion-token range, latency mean/stdev, `finish_reason` values, and OpenAI `system_fingerprint` values;
+- for cases whose repetitions disagree, the repetitions grouped by output (`A: reps 1,2,4`) and a sample diff between the two most common outputs.
+
+Per suite it records:
+- how many cases fall into each classification;
+- how many passed every repetition, at least one, or none;
+- the mean per-case pass rate;
+- each repetition's pass rate with mean/stdev/min/max;
+- the cases ordered from most to least unstable.
+

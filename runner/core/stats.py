@@ -23,6 +23,7 @@ def response_token_stats(response: ModelResponse) -> dict:
         tokens_per_second=tokens_per_second(response.completion_tokens, response.latency),
         gpu_memory_mb=response.gpu_memory_mb,
         finish_reason=response.finish_reason,
+        system_fingerprint=response.system_fingerprint,
     )
 
 

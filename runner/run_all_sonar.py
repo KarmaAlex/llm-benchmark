@@ -7,27 +7,19 @@ Usage:
 """
 
 import argparse
-import time
-from dataclasses import asdict
 
 from runner.cli.arguments import (
+    add_cases_argument,
     add_config_argument,
     add_device_argument,
     add_edit_mode_argument,
     add_sonar_argument,
 )
 from runner.cli.loading import load_model_config
-from runner.core.batch import run_cases
 from runner.filesystem.results_manager import ResultsManager
 from runner.providers.factory import ProviderFactory
-from runner.sonar_tests.pipeline import (
-    analyze_run,
-    discover_cases,
-    failed_result,
-    load_prompt,
-    run_case,
-)
-from runner.sonar_tests.report import compute_summary, print_report
+from runner.sonar_tests.pipeline import load_prompt, run_suite
+from runner.sonar_tests.report import compute_summary, print_report, report_payload
 
 
 def main() -> None:
@@ -46,6 +38,7 @@ def main() -> None:
             "scripts/sonar_server.py."
         ),
     )
+    add_cases_argument(parser)
     args = parser.parse_args()
 
     config = load_model_config(args.config, args.device, args.edit_mode)
@@ -55,32 +48,16 @@ def main() -> None:
     run_directory = ResultsManager.create_run_directory()
     print(f"Run directory: {run_directory}")
 
-    run_start = time.perf_counter()
-
-    results = run_cases(
-        discover_cases(),
-        lambda case_id: run_case(case_id, args.edit_mode, provider, prompt, run_directory),
-        lambda case_id, error: failed_result(case_id, args.edit_mode, error),
+    results, wall_time = run_suite(
+        args.edit_mode, provider, prompt, run_directory, args.cases, args.sonar
     )
-
-    if args.sonar:
-        print("\nRunning SonarQube analysis...")
-        results = analyze_run(results, run_directory)
-
-    wall_time = time.perf_counter() - run_start
 
     summary = compute_summary(results, wall_time)
     print_report(results, summary)
 
     report_path = ResultsManager.write_report(
         run_directory,
-        {
-            "config": config.name,
-            "edit_mode": args.edit_mode,
-            "sonar_analyzed": args.sonar,
-            "summary": summary,
-            "cases": [asdict(r) for r in results],
-        },
+        report_payload(config.name, args.edit_mode, args.sonar, results, summary),
     )
     print(f"\nFull report written to {report_path}")
 

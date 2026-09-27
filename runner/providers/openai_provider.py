@@ -77,6 +77,7 @@ class OpenAIProvider(ModelProvider):
             finish_reason=response.choices[0].finish_reason,
             raw=response.model_dump(),
             tool_calls=self._extract_tool_calls(message),
+            system_fingerprint=getattr(response, "system_fingerprint", None),
         )
 
     def _request_kwargs(self, prompt: ChatPrompt) -> dict:

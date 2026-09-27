@@ -6,6 +6,7 @@ clean SystemExit message instead of a traceback.
 from pathlib import Path
 
 from runner.filesystem.config_loader import ConfigLoader
+from runner.filesystem.paths import CONFIG_DIR
 from runner.filesystem.results_manager import ResultsManager
 from runner.models.model_config import ModelConfig
 
@@ -24,6 +25,13 @@ def load_model_config(name: str, device: str, edit_mode: str | None = None) -> M
         raise SystemExit(1)
 
     return config
+
+
+def resolve_config_name(base: str, suite: str) -> str:
+    """Prefer the suite-specific variant of a model config
+    (`<base>-markdown` / `<base>-sonar`), falling back to `<base>` itself."""
+    variant = f"{base}-{suite}"
+    return variant if (CONFIG_DIR / f"{variant}.yaml").exists() else base
 
 
 def open_run(run_id: str) -> tuple[Path, dict]:

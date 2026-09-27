@@ -34,14 +34,14 @@ class ResultsManager:
         )
 
     @staticmethod
-    def load_report(run_directory: Path) -> dict:
-        report_path = run_directory / REPORT_FILE_NAME
+    def load_report(run_directory: Path, name: str = REPORT_FILE_NAME) -> dict:
+        report_path = run_directory / name
         if not report_path.exists():
-            raise FileNotFoundError(f"No {REPORT_FILE_NAME} found in {run_directory}")
+            raise FileNotFoundError(f"No {name} found in {run_directory}")
         return json.loads(report_path.read_text(encoding="utf-8"))
 
     @staticmethod
-    def write_report(run_directory: Path, report: dict) -> Path:
-        report_path = run_directory / REPORT_FILE_NAME
+    def write_report(run_directory: Path, report: dict, name: str = REPORT_FILE_NAME) -> Path:
+        report_path = run_directory / name
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
         return report_path

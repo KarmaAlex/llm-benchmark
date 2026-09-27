@@ -22,9 +22,11 @@ class SonarCaseResult:
     tokens_per_second: float = 0.0
     gpu_memory_mb: float | None = None
     finish_reason: str | None = None
+    system_fingerprint: str | None = None
     edit_match_summary: str | None = None
     error: str | None = None
     response_text: str | None = None
+    tool_calls: list[dict] | None = None
     diff: str | None = None
     # Filled in by the SonarQube analysis phase. All defaulted so reports
     # written before that phase existed still load (validate_sonar_run.py and

@@ -12,19 +12,23 @@ involved at every call site — check the declaration of the method being called
 For example, given:
 
 ```java
-public Optional<User> findById(long id) { ... }
+public Optional<Account> findByNumber(String number) { ... }
 ```
 
-this call site:
+this call site is noncompliant:
 
 ```java
-return userRepository.findById(id).get().getEmail();
+return accountRepository.findByNumber(number).get().getBalance();
 ```
 
-should be written as:
+Handle the absent case explicitly instead, in whatever way the method's contract
+requires - for example by checking `isPresent()`, or by using `map` together with
+`orElse`, `orElseGet` or `orElseThrow`:
 
 ```java
-return userRepository.findById(id)
-        .map(User::getEmail)
-        .orElseThrow(() -> new NoSuchElementException("No user with id " + id));
+Optional<Account> account = accountRepository.findByNumber(number);
+if (account.isPresent()) {
+    return account.get().getBalance();
+}
+// handle the missing account as the method's contract requires
 ```

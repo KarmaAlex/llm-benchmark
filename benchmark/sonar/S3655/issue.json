@@ -1,6 +1,6 @@
 {
     "rule": "java:S3655",
     "file": "src/main/java/com/benchmark/userlookup/UserController.java",
-    "line": 12,
+    "line": 18,
     "message": "Call \"Optional#isPresent()\" or \"!Optional#isEmpty()\" before accessing the value."
 }

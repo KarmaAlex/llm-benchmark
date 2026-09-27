@@ -4,8 +4,10 @@ Markdown-extraction case pipeline shared by the single-case runner
 build its prompt, and grade the model's JSON answer against the expected one.
 """
 
+import time
 from pathlib import Path
 
+from runner.core.batch import run_cases
 from runner.core.prompt_builder import PromptBuilder
 from runner.core.stats import response_token_stats
 from runner.filesystem.benchmark_loader import BenchmarkLoader
@@ -76,3 +78,19 @@ def failed_result(case_id: str, error: str) -> MarkdownCaseResult:
         execution_time=0.0,
         error=error,
     )
+
+
+def run_suite(
+    provider: ModelProvider,
+    prompt: Prompt,
+    case_ids: list[str] | None = None,
+) -> tuple[list[MarkdownCaseResult], float]:
+    """Run every case (or just `case_ids`) once. Returns the results and
+    the wall-clock time the run took."""
+    run_start = time.perf_counter()
+    results = run_cases(
+        case_ids or discover_cases(),
+        lambda case_id: run_case(case_id, provider, prompt),
+        failed_result,
+    )
+    return results, time.perf_counter() - run_start

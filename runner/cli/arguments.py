@@ -55,3 +55,11 @@ def add_run_id_argument(parser: argparse.ArgumentParser) -> None:
         "run_id",
         help="Run directory name under results/ (or a path to it directly).",
     )
+
+
+def add_cases_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--cases",
+        nargs="+",
+        help="Only run these case ids (default: every case in the suite).",
+    )

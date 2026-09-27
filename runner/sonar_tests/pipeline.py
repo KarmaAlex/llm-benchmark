@@ -11,10 +11,12 @@ A case goes through three phases, each usable on its own:
     analyze   - SonarQube scan diffed against the pristine baseline (batch)
 """
 
+import time
 from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 
+from runner.core.batch import run_cases
 from runner.core.prompt_builder import PromptBuilder
 from runner.core.stats import response_token_stats
 from runner.filesystem.benchmark_loader import BenchmarkLoader
@@ -109,6 +111,7 @@ def generate_case(
         compile_time=0.0,
         error=outcome.error if not outcome.applied else None,
         response_text=response.content,
+        tool_calls=response.tool_calls,
         diff=outcome.diff,
         edit_match_summary=_edit_match_summary(outcome.edit_results),
         **response_token_stats(response),
@@ -227,3 +230,28 @@ def analyze_run(
             analysis = skipped(f"{type(e).__name__}: {e}")
         updated.append(replace(result, **analysis))
     return updated
+
+
+def run_suite(
+    edit_mode: str,
+    provider: ModelProvider,
+    prompt: Prompt,
+    run_directory: Path,
+    case_ids: list[str] | None = None,
+    sonar: bool = True,
+) -> tuple[list[SonarCaseResult], float]:
+    """Run every case (or just `case_ids`) through generate/validate, then
+    the batch SonarQube phase when `sonar` is set. Returns the results and
+    the wall-clock time the run took."""
+    run_start = time.perf_counter()
+    results = run_cases(
+        case_ids or discover_cases(),
+        lambda case_id: run_case(case_id, edit_mode, provider, prompt, run_directory),
+        lambda case_id, error: failed_result(case_id, edit_mode, error),
+    )
+
+    if sonar:
+        print("\nRunning SonarQube analysis...")
+        results = analyze_run(results, run_directory)
+
+    return results, time.perf_counter() - run_start

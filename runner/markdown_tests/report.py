@@ -1,4 +1,5 @@
 from collections import defaultdict
+from dataclasses import asdict
 
 from runner.cli.output import format_gpu_memory, print_run_footer, print_token_summary
 from runner.core.stats import peak_gpu_memory_mb, token_summary
@@ -54,3 +55,12 @@ def print_report(results: list[MarkdownCaseResult], summary: dict) -> None:
     print_token_summary(summary)
     print(f"Total model time: {summary['total_execution_time']:.2f}s")
     print_run_footer(summary)
+
+
+def report_payload(config_name: str, results: list[MarkdownCaseResult], summary: dict) -> dict:
+    """The report.json contents for one markdown run."""
+    return {
+        "config": config_name,
+        "summary": summary,
+        "cases": [asdict(r) for r in results],
+    }

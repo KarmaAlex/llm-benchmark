@@ -11,3 +11,6 @@ class ModelResponse:
     raw: dict[str,Any]
     tool_calls: list[dict[str, Any]] | None = None
     gpu_memory_mb: float | None = None
+    # Backend build identifier reported by OpenAI; a change between two
+    # otherwise identical requests explains a changed response.
+    system_fingerprint: str | None = None

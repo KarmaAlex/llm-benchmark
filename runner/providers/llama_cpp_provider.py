@@ -63,6 +63,13 @@ class LlamaCppProvider(ModelProvider):
             **self.config.sampling,
         )
 
+        # Pass the seed on every request: without one, llama-cpp-python
+        # derives the next call's seed from the previous one, so a case's
+        # output would depend on how many requests ran before it.
+        seed = self.config.parameters.get("seed")
+        if seed is not None:
+            request_kwargs["seed"] = seed
+
         if prompt.tools and self.config.supports_tools:
             request_kwargs["tools"] = prompt.tools
             request_kwargs["tool_choice"] = "required"

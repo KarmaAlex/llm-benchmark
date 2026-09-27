@@ -1,3 +1,5 @@
+from dataclasses import asdict
+
 from runner.cli.output import format_gpu_memory, print_run_footer, print_token_summary
 from runner.core.stats import peak_gpu_memory_mb, token_summary
 from runner.models.sonar_case_result import SonarCaseResult
@@ -118,3 +120,20 @@ def print_generation_report(results: list[SonarCaseResult], summary: dict, run_i
         "\nNot validated yet - run `python -m runner.validate_sonar_run "
         f"{run_id}` to compile and test these cases."
     )
+
+
+def report_payload(
+    config_name: str,
+    edit_mode: str,
+    sonar_analyzed: bool,
+    results: list[SonarCaseResult],
+    summary: dict,
+) -> dict:
+    """The report.json contents for one full (generate + validate) sonar run."""
+    return {
+        "config": config_name,
+        "edit_mode": edit_mode,
+        "sonar_analyzed": sonar_analyzed,
+        "summary": summary,
+        "cases": [asdict(r) for r in results],
+    }
