@@ -166,6 +166,18 @@ def cost_section(summary: dict) -> None:
     measured = [f"{label} {value:.1f}s" for label, value in grading if value]
     if measured:
         print(f"  grading time  {', '.join(measured)}")
+    power = [
+        (label, summary.get(avg), summary.get(peak))
+        for label, avg, peak in (("GPU", "avg_gpu_power_w", "peak_gpu_power_w"),
+                                 ("CPU package", "avg_cpu_power_w", "peak_cpu_power_w"))
+        if summary.get(avg) is not None
+    ]
+    if power:
+        print("  power         " + ", ".join(
+            f"{label} {avg:.1f} W avg" + (f" / {peak:.1f} W peak" if peak is not None else "")
+            for label, avg, peak in power))
+    if summary.get("total_energy_wh") is not None:
+        print(f"  energy        {summary['total_energy_wh']:.2f} Wh drawn by the model calls (GPU board + CPU package)")
     print(f"  wall clock    {summary.get('wall_time', 0.0):.1f}s")
 
 

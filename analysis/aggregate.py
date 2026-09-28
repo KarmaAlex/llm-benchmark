@@ -21,7 +21,6 @@ dataclasses, so older reports still load and nothing here imports llama.cpp.
 
 import json
 import math
-import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -30,9 +29,16 @@ import pandas as pd
 import yaml
 
 from analysis.report import clean_fix
-from runner.filesystem.paths import BENCHMARK_DIR, CONFIG_DIR, RESULTS_DIR
+from runner.filesystem.paths import BENCHMARK_DIR, CONFIG_DIR
 from runner.filesystem.results_manager import ResultsManager
 from runner.reproducibility.aggregate import AGGREGATE_FILE_NAME, SUITES, repetition_directories
+from runner.reproducibility.runs import (  # noqa: F401 - re-exported
+    is_full_run,
+    load_run,
+    model_key,
+    reproducibility_runs,
+    run_model,
+)
 
 COMMERCIAL = "Commercial"
 OPEN_SOURCE = "Open source"
@@ -48,17 +54,11 @@ GROUP_BY_PROVIDER = {
 # runner/reproducibility/observations.py).
 SONAR_STAGES = ("not_applied", "applied", "compiled", "tests_passed", "resolved", "clean_fix")
 
-_SUITE_SUFFIX = re.compile(r"\s*\((?:markdown|sonar)\)$")
 
 
 # --------------------------------------------------------------------------- #
 # models and groups
 # --------------------------------------------------------------------------- #
-
-
-def model_key(config_name: str) -> str:
-    """'GPT-5 (sonar)' -> 'GPT-5'. Quantizations stay separate models."""
-    return _SUITE_SUFFIX.sub("", config_name or "").strip()
 
 
 def _config_field(field_name: str, config_dir: Path) -> dict[str, str]:
@@ -127,69 +127,6 @@ class RunRef:
     @property
     def settings(self) -> dict:
         return self.run.get("settings") or {}
-
-
-def reproducibility_runs(results_dir: Path | None = None) -> list[Path]:
-    """Every directory holding a reproducibility.json, newest first
-    (directories are named for their UTC start time)."""
-    results_dir = results_dir or RESULTS_DIR
-    if not results_dir.is_dir():
-        return []
-    return sorted(
-        (p for p in results_dir.iterdir() if p.is_dir() and (p / AGGREGATE_FILE_NAME).exists()),
-        key=lambda p: p.name,
-        reverse=True,
-    )
-
-
-def load_run(path: Path) -> dict:
-    return ResultsManager.load_report(path, AGGREGATE_FILE_NAME)
-
-
-def run_model(run: dict) -> str:
-    """The model a run tested. Mixed-model runs (one config per suite pointing
-    at different models) report both, joined, so they're easy to spot."""
-    configs = (run.get("settings") or {}).get("configs") or {}
-    if not configs:
-        configs = {s: (a.get("configs") or [""])[0] for s, a in (run.get("suites") or {}).items()}
-    keys = sorted({model_key(name) for name in configs.values() if name})
-    return " + ".join(keys) if keys else "unknown"
-
-
-def is_full_run(run: dict, path: Path) -> tuple[bool, str]:
-    """(True, "") for a complete run of both suites, otherwise (False, why)."""
-    settings = run.get("settings") or {}
-    suites = run.get("suites") or {}
-
-    missing = [s for s in SUITES if s not in (settings.get("suites") or [])]
-    if missing:
-        return False, f"suite(s) not run: {', '.join(missing)}"
-    if settings.get("cases"):
-        return False, f"restricted to --cases {' '.join(settings['cases'])}"
-    if not settings.get("sonar", True):
-        return False, "run with --no-sonar"
-    if run.get("pending_validation"):
-        return False, f"not yet validated: {', '.join(run['pending_validation'])}"
-    missing = [s for s in SUITES if s not in suites]
-    if missing:
-        return False, f"no aggregate for: {', '.join(missing)}"
-    if suites["sonar"].get("criterion") != "clean_fix":
-        return False, f"sonar graded on {suites['sonar'].get('criterion')}, not clean_fix"
-
-    models = {model_key(name) for name in (settings.get("configs") or {}).values()}
-    if len(models) > 1:
-        return False, f"suites use different models: {', '.join(sorted(models))}"
-
-    expected = settings.get("repetitions")
-    for suite in SUITES:
-        completed = len(repetition_directories(path / suite))
-        aggregated = suites[suite].get("repetitions")
-        if expected is not None and (completed != expected or aggregated != expected):
-            return False, f"{suite}: {completed}/{expected} repetitions completed"
-        short = [c["case_id"] for c in suites[suite].get("cases", []) if c.get("repetitions") != aggregated]
-        if short:
-            return False, f"{suite}: case(s) missing from some repetitions: {', '.join(short)}"
-    return True, ""
 
 
 def load_run_ref(path: Path, catalog: dict[str, str] | None = None, overrides: dict[str, str] | None = None) -> RunRef:
@@ -395,6 +332,7 @@ def rep_frame(ref: RunRef) -> pd.DataFrame:
         criterion = (suites.get(suite) or {}).get("criterion")
         for directory in repetition_directories(ref.path / suite):
             report = ResultsManager.load_report(directory)
+            rep_wall_time = (report.get("summary") or {}).get("wall_time")
             rep = report.get("repetition") or int(directory.name.removeprefix("rep-"))
             if suite == "sonar" and criterion is None:
                 criterion = "clean_fix" if report.get("sonar_analyzed") else "tests_passed"
@@ -425,5 +363,10 @@ def rep_frame(ref: RunRef) -> pd.DataFrame:
                     "completion_tokens": case.get("completion_tokens"),
                     "tokens_per_second": case.get("tokens_per_second"),
                     "gpu_memory_mb": case.get("gpu_memory_mb"),
+                    "gpu_power_w": case.get("gpu_power_w"),
+                    "cpu_power_w": case.get("cpu_power_w"),
+                    "energy_wh": case.get("energy_wh"),
+                    "gpu_other_processes": case.get("gpu_other_processes"),
+                    "rep_wall_time": rep_wall_time,
                 })
     return pd.DataFrame(rows)

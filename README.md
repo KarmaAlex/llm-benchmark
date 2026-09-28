@@ -92,6 +92,7 @@ All commands run as `python -m runner.<script>` from the repo root.
 | `analyze_sonar_run <run_id> [--cases ...]` | Runs the SonarQube analysis phase for an already-generated *and* compiled run directory, without calling the model again, and updates that run's `report.json` in place (`"sonar_analyzed": true`). |
 
 | `run_all_reproducibility --model <name> [--repetitions N] [--suites ...]` | Runs both suites N times (default 10) with the same model and reports, per case, whether the responses changed between repetitions and how often the case passed. See *Reproducibility runs* below. |
+| `run_all_models [--dry-run] [--local-only] [--models ...]` | Runs `run_all_reproducibility` for every available model, one after the other. See *Running every model* below. |
 
 `run_all_sonar` performs the analysis phase inline by default; pass `--no-sonar` to skip it and run `analyze_sonar_run` later instead. `run_all_markdown`, `run_all_sonar` and `run_all_reproducibility` all take `--cases <id> ...` to run a subset.
 
@@ -172,6 +173,20 @@ Every `run_all_*` invocation writes `results/<timestamp>/report.json` with `{"co
 
 **Sonar** — per case: `applied`, `compiled`, `tests_ran`, `tests_passed`, `tests_run_count`/`tests_failed`/`tests_errored`, `execution_time`, `compile_time`, `test_time`, token counts, `tokens_per_second`, plus the generated `response_text`/`diff`. From the analysis phase: `sonar_analyzed`, `target_resolved`, `new_issues_count`, `new_issues` (full detail per finding), `remaining_target_issues`, `baseline_issue_count`/`after_issue_count`, `sonar_time`, and `sonar_error` (why a case was skipped, e.g. it never compiled). Aggregate summary adds: `applied_rate`, `compiled_rate`, `tests_passed_rate` (computed over compiled cases only, since a case that fails to compile can't run tests), `resolved_rate` (over analyzed cases, for the same reason), `clean_fix_rate` (over all cases — this is the headline number), `new_issues_total`, plus the same token/timing totals as markdown. `run_all_sonar_generate` writes a reduced summary (token/throughput/applied stats only, no compile/test fields) until `validate_sonar_run` fills the rest in.
 
+**Hardware usage (local models, both suites)**: per case, `gpu_memory_mb` is read once after the call. It's this process's own GPU memory, so on a GPU shared with another job only our share counts. Only if process IDs are hidden (some containers) does it fall back to the whole card's usage. Power is sampled throughout the call:
+
+- `gpu_power_w` / `gpu_power_peak_w`: GPU board power from `nvidia-smi`.
+- `cpu_power_w` / `cpu_power_peak_w`: CPU package power, from the RAPL counter when it's readable (normally root only), otherwise an AMD APU's `PPT` sensor.
+- `energy_wh`: what those two drew over the call.
+
+The summary adds `peak_gpu_memory_mb`, `avg_gpu_power_w` / `avg_cpu_power_w` (weighted by call time), `peak_gpu_power_w` / `peak_cpu_power_w` and `total_energy_wh`. The per-case console table shows mean GPU + CPU power.
+
+The sampler (`runner/providers/power.py`) runs in the background while a model is loaded. Each call takes the samples inside its own time window, so the call's timing isn't disturbed. Energy covers the GPU board and the CPU package only; RAM, display and power-supply losses aren't measured, so it's a lower bound on wall-socket energy. Anything the machine can't measure is `null`, as are all power fields for API models.
+
+**Shared machines (SLURM)**: GPU readings target the GPUs in `CUDA_VISIBLE_DEVICES`, so a job measures the GPU it was allocated rather than whatever GPU 0 is. A MIG slice, or a job without a GPU, reads as unmeasured.
+
+Each case also records `gpu_other_processes`: the number of other processes on its GPU holding at least 256 MiB. A desktop compositor's few MiB don't count. Any such process means the GPU was shared, so that case's power and latency include someone else's work. The summary counts these cases in `gpu_shared_cases`, and the console prints a warning. The field is `null` when it can't be told, for example inside a container that hides process IDs.
+
 ## Reproducibility runs
 
 `python -m runner.run_all_reproducibility --model <name>` runs the markdown and sonar suites `--repetitions` times (default 10). Each suite uses `<name>-markdown` / `<name>-sonar` when that config exists, otherwise `<name>` itself; `--markdown-config` / `--sonar-config` pick one explicitly. The model is loaded once per suite and reused for every repetition, and llama.cpp configs pass their `seed` on every request, so a case's output doesn't depend on how many calls ran before it. `--edit-mode`, `--device`, `--no-sonar` and `--cases` behave as in the other runners.
@@ -214,6 +229,23 @@ Per suite it records:
 - each repetition's pass rate with mean/stdev/min/max;
 - the cases ordered from most to least unstable.
 
+### Running every model
+
+`python -m runner.run_all_models` runs the reproducibility benchmark for every available model in turn, so each one ends up with a full run to compare. Start with `--dry-run` to see the plan.
+
+A model is a base config name, such as `qwen2.5-coder-7b-q4` rather than its `-markdown` / `-sonar` variants. It is available when every suite resolves to a config whose model can be loaded:
+
+- **llama.cpp:** its GGUF file exists under `models/`.
+- **openai:** `OPENAI_API_KEY` is set. These runs are billed per token; `--local-only` leaves them out.
+
+The script also lists GGUF files under `models/` that no config points at, since those can't run until a config does.
+
+- **Skipping existing runs:** a model that already has a full run with the same repetitions and edit mode is skipped, so re-running the script after an interruption only fills the gaps. Pass `--rerun` to run such models again.
+- **Order and isolation:** local models run first, then API models. Each model runs in its own process, so its GPU memory is freed before the next one loads.
+- **Failures:** a failing model doesn't stop the batch unless you pass `--stop-on-failure`. A summary at the end lists each model's outcome, duration and run directory.
+- **Settings:** `--repetitions`, `--suites`, `--edit-mode`, `--device` and `--no-sonar` are passed through to each run. `--edit-mode` defaults to `structured`, like the existing full runs, so the results stay comparable.
+- **Selecting models:** `--models BASE ...` / `--exclude BASE ...` pick which models run, and `--compare` runs `analysis.compare_models` at the end.
+
 ### Plotting reproducibility results
 
 Both scripts need the `analysis` extra (`pip install -e ".[analysis]"`) and take `--format {png,pdf,svg}` (default `png` at `--dpi 200`) and `--out DIR`.
@@ -251,7 +283,9 @@ It writes `pass_rate` (pooled over every case × repetition trial, with a 95% Wi
 Both plotting scripts put a price in euros on each run. The rates are dated constants in `analysis/costs.py`, and every cost figure repeats them in a footnote.
 
 - **API models** (`provider: openai`) cost tokens × OpenAI's standard-tier list price ([pricing page](https://developers.openai.com/api/docs/pricing), as of 2026-09-28). gpt-5 is $1.25 input / $10.00 output and gpt-5-mini is $0.25 / $2.00, per 1M tokens. Completion tokens already include reasoning tokens, which are billed as output. Runs don't record cached-input tokens, so all input is priced at the uncached rate, which makes this an upper bound. USD is converted at the ECB reference rate of 1 € = 1.1403 $ (2026-09-25).
-- **Local models** (`provider: llama.cpp`) are costed on electricity alone: inference time × an assumed wall-power draw × €0.3163/kWh. That price is ARERA's Q3 2026 reference for the typical household customer, taxes included. Hardware depreciation is not counted. No power was measured during the runs, so the draw is an assumption: 90 W by default (an RTX 4050 Laptop GPU near its 60 W limit, plus CPU and platform), shown with a 60–120 W band.
+- **Local models** (`provider: llama.cpp`) are costed on electricity alone, at €0.3163/kWh. That price is ARERA's Q3 2026 reference for the typical household customer, taxes included. Hardware depreciation is not counted. Where a run recorded `energy_wh` (see *Metrics extracted per run*), that measured energy is used (basis `electricity-measured`). Because it covers only the GPU board and the CPU package, it's a lower bound. Runs without measurements fall back to inference time × an assumed wall-power draw (basis `electricity`): 90 W by default (an RTX 4050 Laptop GPU near its 60 W limit, plus CPU and platform), shown with a 60–120 W band. Each trial uses whichever basis it has, and every figure's footnote names the bases it used.
+
+- **Rented GPUs** (a llama.cpp run whose `settings.hardware.gpus` are all in `GPU_HOUR_PRICES_USD`) are costed in GPU-hours: inference time × the job's GPUs × the hourly rate. That's how a shared cluster GPU is paid for, and unlike a power reading it isn't affected by other jobs on the node. The default for the NVIDIA H200 NVL is the on-demand market rate of $3.79/GPU-hour (RunPod 1×), with a band of $3.52 (Vast.ai, the cheapest NVL listing) to $4.50 (the median across H200 providers), as of 2026-09-28. If your cluster has an internal rate, use it instead: `--gpu-hour-price "NVIDIA H200 NVL=<EUR>"`. A SLURM run on a GPU with no price (another GPU type on a mixed node) is reported as unpriced, never costed at household electricity prices, until `--gpu-hour-price` covers it. The GPU's exact name is in the run's `settings.hardware.gpus`. `costs.csv` also reports `gpu_hours` (model time) and `allocated_gpu_hours` (each repetition's wall-clock time × GPUs).
 
 Only the model call is costed. Compile, test and SonarQube time is harness overhead that every model pays alike. Override any assumption for a run with `--local-watts`, `--local-watts-range LOW HIGH`, `--kwh-price` and `--usd-per-eur`. A model with no known price is reported as unpriced, never as free. To price a new API model, add it to `OPENAI_PRICES_USD_PER_1M`.
 

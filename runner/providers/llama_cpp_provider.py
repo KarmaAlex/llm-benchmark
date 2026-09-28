@@ -1,11 +1,13 @@
 import json
 import time
+import weakref
 from typing import cast
 
 from llama_cpp import Llama
 from openai.types.chat import ChatCompletion
 
-from runner.providers.gpu_memory import get_gpu_memory_used_mb
+from runner.providers.gpu_memory import get_gpu_memory_used_mb, other_gpu_processes
+from runner.providers.power import PowerSampler
 from runner.models.chat_prompt import ChatPrompt
 from runner.models.model_config import ModelConfig
 from runner.models.model_response import ModelResponse
@@ -22,6 +24,12 @@ class LlamaCppProvider(ModelProvider):
             **config.parameters,
         )
 
+        # Sampled for as long as the model is loaded; stopped when this
+        # provider is garbage-collected (run_all_reproducibility releases one
+        # suite's provider before loading the next).
+        self.power = PowerSampler()
+        weakref.finalize(self, self.power.close)
+
     def generate(self, prompt: ChatPrompt) -> ModelResponse:
 
         if prompt.tools and not self.config.supports_tools:
@@ -33,12 +41,16 @@ class LlamaCppProvider(ModelProvider):
                 "the text-mode structured-edit prompt instead."
             )
 
+        self.power.wait_for_samples(timeout=5)
+        window_start = time.monotonic()
         start = time.perf_counter()
 
         response = self._generate(prompt)
 
         latency = time.perf_counter() - start
+        power = self.power.reading(window_start, time.monotonic())
         gpu_memory_mb = get_gpu_memory_used_mb()
+        gpu_other_processes = other_gpu_processes()
 
         usage = response.usage
         message = response.choices[0].message
@@ -52,6 +64,12 @@ class LlamaCppProvider(ModelProvider):
             raw=response.model_dump(),
             tool_calls=self._extract_tool_calls(message),
             gpu_memory_mb=gpu_memory_mb,
+            gpu_power_w=power.gpu_power_w,
+            gpu_power_peak_w=power.gpu_power_peak_w,
+            cpu_power_w=power.cpu_power_w,
+            cpu_power_peak_w=power.cpu_power_peak_w,
+            energy_wh=power.energy_wh,
+            gpu_other_processes=gpu_other_processes,
         )
 
     def _generate(self, prompt: ChatPrompt) -> ChatCompletion:

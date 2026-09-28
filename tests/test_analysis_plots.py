@@ -331,3 +331,97 @@ def test_cost_axis_ticks_and_scale():
     assert _cost_scale(0.045) == 1_000
     assert _cost_scale(0.00012) == 1_000
     assert _cost_scale(0.00000005) == 1_000_000
+
+
+def test_measured_energy_replaces_the_power_assumption(tmp_path):
+    def measured(rep):
+        cases = [markdown_case("md001", True), markdown_case("md002", True)]
+        cases[0]["energy_wh"] = 0.5  # md002 predates power sampling
+        return cases
+
+    ref = ref_for(make_run(tmp_path, "2026-01-01_00-00-00", model="Model-B", markdown_cases=measured))
+    trials = cost.trial_costs(ref, cost.CostAssumptions(eur_per_kwh=0.30), CATALOG, MODEL_IDS)
+    markdown = trials[trials["suite"] == "markdown"].set_index("case_id")
+
+    row = markdown.loc["md001"].iloc[0]
+    assert row["cost_basis"] == cost.ELECTRICITY_MEASURED
+    assert row["kwh"] == pytest.approx(0.0005)
+    assert row["cost_eur"] == pytest.approx(0.0005 * 0.30)
+    assert row["cost_eur_low"] == row["cost_eur_high"] == row["cost_eur"]
+    assert set(markdown.loc["md002"]["cost_basis"]) == {cost.ELECTRICITY}
+
+    note = cost.CostAssumptions().note(set(trials["cost_basis"]))
+    assert "local (measured)" in note and "local (assumed)" in note
+
+
+def with_hardware(path, gpus, slurm_job_id="42"):
+    run = json.loads((path / AGGREGATE_FILE_NAME).read_text())
+    run["settings"]["hardware"] = {"host": "node1", "gpus": gpus, "slurm_job_id": slurm_job_id}
+    (path / AGGREGATE_FILE_NAME).write_text(json.dumps(run))
+    return path
+
+
+def test_runs_on_a_priced_gpu_are_costed_by_gpu_hour(tmp_path):
+    def cases(rep):
+        measured = markdown_case("md001", True)
+        measured["energy_wh"] = 0.5  # measured, but a rented GPU is paid by the hour
+        return [measured, markdown_case("md002", True)]
+
+    path = with_hardware(make_run(tmp_path, "2026-01-01_00-00-00", model="Model-B", markdown_cases=cases),
+                         ["NVIDIA H200 NVL"])
+    trials = cost.trial_costs(ref_for(path), cost.CostAssumptions(), CATALOG, MODEL_IDS)
+    row = trials[trials["suite"] == "markdown"].iloc[0]
+    rate = cost.CostAssumptions().gpu_hour_price(["NVIDIA H200 NVL"])
+
+    assert row["cost_basis"] == cost.GPU_HOURS
+    assert row["gpu_hours"] == pytest.approx(1.5 / 3600)
+    assert row["cost_eur"] == pytest.approx(1.5 / 3600 * 3.79 / cost.USD_PER_EUR)
+    assert row["cost_eur_low"] == pytest.approx(1.5 / 3600 * rate.low)
+    assert row["cost_eur_high"] == pytest.approx(1.5 / 3600 * rate.high)
+    assert row["kwh"] == pytest.approx(0.0005)  # still recorded, just not what's billed
+
+
+def test_site_rate_override_and_multi_gpu_jobs(tmp_path):
+    parser = argparse.ArgumentParser()
+    cost.add_cost_arguments(parser)
+    assumptions = cost.assumptions_from_args(parser.parse_args(["--gpu-hour-price", "NVIDIA H200 NVL=2.00"]))
+    assert assumptions.gpu_hour_overridden == ("nvidia h200 nvl",)
+    assert "site rate" in assumptions.note({cost.GPU_HOURS})
+
+    path = with_hardware(make_run(tmp_path, "2026-01-01_00-00-00", model="Model-B"),
+                         ["NVIDIA H200 NVL", "NVIDIA H200 NVL"])
+    trials = cost.trial_costs(ref_for(path), assumptions, CATALOG, MODEL_IDS)
+    row = trials[trials["suite"] == "markdown"].iloc[0]
+    assert row["gpu_hours"] == pytest.approx(2 * 1.5 / 3600)
+    assert row["cost_eur"] == row["cost_eur_low"] == row["cost_eur_high"] == pytest.approx(2 * 1.5 / 3600 * 2.00)
+
+    with pytest.raises(SystemExit, match="Bad --gpu-hour-price"):
+        cost.assumptions_from_args(parser.parse_args(["--gpu-hour-price", "3.20"]))
+
+
+def test_own_gpu_stays_on_electricity_but_reports_gpu_hours(tmp_path):
+    path = with_hardware(make_run(tmp_path, "2026-01-01_00-00-00", model="Model-B"),
+                         ["NVIDIA GeForce RTX 4050 Laptop GPU"], slurm_job_id=None)
+    trials = cost.trial_costs(ref_for(path), cost.CostAssumptions(), CATALOG, MODEL_IDS)
+    assert set(trials["cost_basis"]) == {cost.ELECTRICITY}
+    assert trials["gpu_hours"].notna().all()
+
+
+def test_cost_summary_reports_allocated_gpu_hours(tmp_path):
+    path = with_hardware(make_run(tmp_path, "2026-01-01_00-00-00", model="Model-B"), ["NVIDIA H200 NVL"])
+    for report_path in path.glob("*/rep-*/report.json"):
+        report = json.loads(report_path.read_text())
+        report["summary"] = {"wall_time": 1800.0}  # half an hour per repetition
+        report_path.write_text(json.dumps(report))
+    trials = cost.trial_costs(ref_for(path), cost.CostAssumptions(), CATALOG, MODEL_IDS)
+    markdown = cost.cost_summary(trials).set_index("suite").loc["markdown"]
+    assert markdown["allocated_gpu_hours"] == pytest.approx(2 * 0.5)  # 2 reps x 0.5 h x 1 GPU
+    assert markdown["gpu_hours"] == pytest.approx(4 * 1.5 / 3600)
+
+
+def test_cluster_run_on_an_unpriced_gpu_is_unpriced_not_household_electricity(tmp_path):
+    path = with_hardware(make_run(tmp_path, "2026-01-01_00-00-00", model="Model-B"), ["NVIDIA L40S"])
+    trials = cost.trial_costs(ref_for(path), cost.CostAssumptions(), CATALOG, MODEL_IDS)
+    assert set(trials["cost_basis"]) == {cost.UNPRICED}
+    assert trials["cost_eur"].isna().all()
+    assert trials["gpu_hours"].notna().all()  # still counted as a resource

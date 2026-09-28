@@ -48,6 +48,8 @@ from runner.markdown_tests import pipeline as markdown_pipeline
 from runner.markdown_tests import report as markdown_report
 from runner.models.model_config import ModelConfig
 from runner.providers.factory import ProviderFactory
+from runner.providers.gpu_memory import gpu_occupants
+from runner.providers.hardware import hardware_info
 from runner.reproducibility.aggregate import AGGREGATE_FILE_NAME, SUITES, aggregate_run
 from runner.reproducibility.report import print_reproducibility_report
 from runner.sonar_tests import pipeline as sonar_pipeline
@@ -96,6 +98,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     add_cases_argument(parser)
+    parser.add_argument(
+        "--require-free-gpu",
+        action="store_true",
+        help=(
+            "Refuse to start if another process already holds memory on the GPU "
+            "(default: warn and record it in the run's settings). A shared GPU "
+            "skews latency, power and GPU-hour costs."
+        ),
+    )
     parser.add_argument(
         "--aggregate-only",
         metavar="RUN_ID",
@@ -221,6 +232,25 @@ def repetition_directory(suite_directory: Path, rep: int, repetitions: int, suit
     return directory
 
 
+def check_gpu_is_free(required: bool) -> list[dict] | None:
+    """Before any model loads: who else is on the GPU. Returned so the run
+    records it; with `required`, a GPU someone else is using stops the run."""
+    occupants = gpu_occupants()
+    if occupants:
+        held = ", ".join(
+            f"pid {o['pid']} ({o['used_memory_mb']:.0f} MiB)" if o["used_memory_mb"] is not None
+            else f"pid {o['pid']}" for o in occupants
+        )
+        message = (
+            f"The GPU is already in use by another process: {held}. Latency, power and "
+            "GPU-hour costs measured on it include that process's work."
+        )
+        if required:
+            raise SystemExit(f"{message} Not starting (--require-free-gpu).")
+        print(f"WARNING: {message}")
+    return occupants
+
+
 def run(args: argparse.Namespace) -> Path:
     selected_cases = cases_per_suite(args)
     # Load (and validate) every config before spending time on the first suite.
@@ -232,6 +262,9 @@ def run(args: argparse.Namespace) -> Path:
         )
         for suite in selected_cases
     }
+    hardware = hardware_info()
+    if any(config.provider == "llama.cpp" for config in configs.values()):
+        hardware["gpu_occupants_at_start"] = check_gpu_is_free(args.require_free_gpu)
 
     run_directory = ResultsManager.create_run_directory()
     print(f"Run directory: {run_directory}")
@@ -245,6 +278,7 @@ def run(args: argparse.Namespace) -> Path:
         "sonar": args.sonar,
         "device": args.device,
         "cases": args.cases,
+        "hardware": hardware,
     }
     # Written up front so --aggregate-only on an interrupted run still knows
     # what was asked for.

@@ -1,7 +1,7 @@
 from dataclasses import asdict
 
-from runner.cli.output import format_gpu_memory, print_run_footer, print_token_summary
-from runner.core.stats import peak_gpu_memory_mb, token_summary
+from runner.cli.output import format_gpu_memory, format_power, print_power_summary, print_run_footer, print_token_summary
+from runner.core.stats import peak_gpu_memory_mb, power_summary, token_summary
 from runner.models.sonar_case_result import SonarCaseResult
 
 
@@ -37,6 +37,7 @@ def compute_summary(results: list[SonarCaseResult], wall_time: float) -> dict:
         "total_compile_time": sum(r.compile_time for r in results),
         "total_test_time": sum(r.test_time for r in results),
         "peak_gpu_memory_mb": peak_gpu_memory_mb(results),
+        **power_summary(results),
         "wall_time": wall_time,
     }
 
@@ -45,7 +46,7 @@ def print_report(results: list[SonarCaseResult], summary: dict) -> None:
     print(
         f"\n{'Case':<10} {'Applied':<9} {'Compiled':<10} {'Tests':<14} {'Resolved':<10} "
         f"{'New':<5} {'Clean':<7} {'Time (s)':<10} {'Tokens':<9} {'Tok/s':<8} "
-        f"{'GPU MiB':<9} {'Match':<16} Error"
+        f"{'GPU MiB':<9} {'Power W':<9} {'Match':<16} Error"
     )
     for r in results:
         if not r.tests_ran:
@@ -59,7 +60,7 @@ def print_report(results: list[SonarCaseResult], summary: dict) -> None:
             f"{resolved:<10} {new_issues:<5} {str(r.clean_fix):<7} "
             f"{r.execution_time:<10.2f} {r.total_tokens:<9} "
             f"{r.tokens_per_second:<8.1f} {format_gpu_memory(r.gpu_memory_mb):<9} "
-            f"{r.edit_match_summary or '':<16} "
+            f"{format_power(r):<9} {r.edit_match_summary or '':<16} "
             f"{r.error or r.sonar_error or ''}"
         )
 
@@ -95,6 +96,9 @@ def compute_generation_summary(results: list[SonarCaseResult], wall_time: float)
         "applied_count": applied_count,
         "applied_rate": applied_count / total if total else 0.0,
         **token_summary(results),
+        "peak_gpu_memory_mb": peak_gpu_memory_mb(results),
+        # Measured while generating, so a generate-only run already has it.
+        **power_summary(results),
         "wall_time": wall_time,
     }
 
@@ -115,6 +119,7 @@ def print_generation_report(results: list[SonarCaseResult], summary: dict, run_i
           f"({summary['applied_rate']:.0%})")
     print_token_summary(summary)
     print(f"Total model time: {summary['total_execution_time']:.2f}s")
+    print_power_summary(summary)
     print(f"Wall-clock run time: {summary['wall_time']:.2f}s")
     print(
         "\nNot validated yet - run `python -m runner.validate_sonar_run "

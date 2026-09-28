@@ -232,7 +232,9 @@ def main() -> None:
     frames = build_frames(selected, assumptions)
     unpriced = sorted(set(frames["costs"].loc[frames["costs"]["cost_basis"].str.contains(cost.UNPRICED), "model"]))
     if unpriced:
-        print(f"warning: no price known for {', '.join(unpriced)} - add it to analysis/costs.py", file=sys.stderr)
+        print(f"warning: no price known for {', '.join(unpriced)} - an API model needs adding to "
+              "analysis/costs.py; a cluster run needs --gpu-hour-price \"<GPU name>=<EUR>\" for its GPU "
+              "(the name is in the run's settings.hardware.gpus)", file=sys.stderr)
     print_costs(frames["costs"])
 
     written = plot_comparison(frames, out_dir, args.format, args.dpi, assumptions)

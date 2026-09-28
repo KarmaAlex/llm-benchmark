@@ -1,8 +1,8 @@
 from collections import defaultdict
 from dataclasses import asdict
 
-from runner.cli.output import format_gpu_memory, print_run_footer, print_token_summary
-from runner.core.stats import peak_gpu_memory_mb, token_summary
+from runner.cli.output import format_gpu_memory, format_power, print_run_footer, print_token_summary
+from runner.core.stats import peak_gpu_memory_mb, power_summary, token_summary
 from runner.models.markdown_case_result import MarkdownCaseResult
 
 
@@ -23,6 +23,7 @@ def compute_summary(results: list[MarkdownCaseResult], wall_time: float) -> dict
         "matched_rate": matched_count / total if total else 0.0,
         **token_summary(results),
         "peak_gpu_memory_mb": peak_gpu_memory_mb(results),
+        **power_summary(results),
         "wall_time": wall_time,
         "by_difficulty": {
             str(k): v for k, v in sorted(by_difficulty.items())
@@ -33,14 +34,15 @@ def compute_summary(results: list[MarkdownCaseResult], wall_time: float) -> dict
 def print_report(results: list[MarkdownCaseResult], summary: dict) -> None:
     print(
         f"\n{'Case':<10} {'Difficulty':<11} {'Matched':<9} {'Time (s)':<10} "
-        f"{'Tokens':<9} {'Tok/s':<8} {'GPU MiB':<9} Error"
+        f"{'Tokens':<9} {'Tok/s':<8} {'GPU MiB':<9} {'Power W':<9} Error"
     )
     for r in results:
         error_summary = (r.error or "").splitlines()[0] if r.error else ""
         print(
             f"{r.case_id:<10} {str(r.difficulty):<11} {str(r.matched):<9} "
             f"{r.execution_time:<10.2f} {r.total_tokens:<9} "
-            f"{r.tokens_per_second:<8.1f} {format_gpu_memory(r.gpu_memory_mb):<9} {error_summary}"
+            f"{r.tokens_per_second:<8.1f} {format_gpu_memory(r.gpu_memory_mb):<9} "
+            f"{format_power(r):<9} {error_summary}"
         )
 
     print(f"\nMatched: {summary['matched_count']}/{summary['total_cases']} "

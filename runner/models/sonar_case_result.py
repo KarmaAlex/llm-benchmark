@@ -21,6 +21,12 @@ class SonarCaseResult:
     total_tokens: int = 0
     tokens_per_second: float = 0.0
     gpu_memory_mb: float | None = None
+    gpu_power_w: float | None = None
+    gpu_power_peak_w: float | None = None
+    cpu_power_w: float | None = None
+    cpu_power_peak_w: float | None = None
+    energy_wh: float | None = None
+    gpu_other_processes: int | None = None
     finish_reason: str | None = None
     system_fingerprint: str | None = None
     edit_match_summary: str | None = None
