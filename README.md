@@ -15,6 +15,7 @@ Both suites share the same execution pipeline: **Benchmark Loader → Prompt Loa
 benchmark/    Benchmark case data (read-only): benchmark/markdown/mdNNN/, benchmark/sonar/<RULE_ID>/
 configs/      Per-model YAML configs (base + -markdown/-sonar task variants)
 prompts/      Versioned prompt templates (system_v1.md, markdown_v1.md, sonar_v1.md, ...)
+analysis/     Reading finished runs back: console reports and matplotlib/seaborn figures
 runner/       The execution engine (installable package) — loaders, providers, grading, CLI entry points
 scripts/      Standalone utility scripts (SonarQube server control, fixture verification, model smoke test)
 tests/        pytest suite for the runner package
@@ -28,6 +29,7 @@ Requires Python ≥ 3.11.
 ```bash
 pip install -e .          # core deps: openai, llama-cpp-python, PyYAML, python-dotenv, huggingface-hub
 pip install -e ".[dev]"   # + pytest, for running tests/
+pip install -e ".[analysis]"  # + matplotlib, seaborn, pandas, for the plotting scripts
 ```
 
 **Important** installing llama-cpp-python requires nvcc to use cuda devices, this also requires setting the CMAKE_ARGS="-DGGML_CUDA=on" environment variable before installing it
@@ -211,4 +213,45 @@ Per suite it records:
 - the mean per-case pass rate;
 - each repetition's pass rate with mean/stdev/min/max;
 - the cases ordered from most to least unstable.
+
+### Plotting reproducibility results
+
+Both scripts need the `analysis` extra (`pip install -e ".[analysis]"`) and take `--format {png,pdf,svg}` (default `png` at `--dpi 200`) and `--out DIR`.
+
+`python -m analysis.plot_reproducibility [<run_id>]` renders one reproducibility run (the newest by default) into `results/<run>/plots/`:
+
+| Figure | Shows |
+|---|---|
+| `classification` | share of cases identical / equivalent / outcome-stable / flaky / harness-error, per suite |
+| `pass_matrix` | cases × repetitions, pass / fail / harness error — a deterministic case is a solid row |
+| `repetition_rate` | each repetition's pass rate with the mean and a ±1 sd band |
+| `case_stability` | per case, the share of repetitions giving the most common output and how many distinct outputs there were |
+| `sonar_funnel` | how many sonar trials reached each pipeline stage, and where each case's repetitions stopped |
+| `latency_tokens` | per-case latency and completion-token spread across repetitions |
+| `markdown_difficulty` | markdown pass rate by difficulty level |
+| `cost_by_case` | what one attempt at each case costs (see *Cost estimates* below), plus `costs.csv` with per-suite totals |
+
+Partial runs still plot whatever they contain; the script says what makes the run incomplete.
+
+`python -m analysis.compare_models` compares commercial and open-source models, writing to `results/comparisons/<timestamp>/`. For each model it takes the newest **full** reproducibility run, meaning:
+
+- both suites were run, on every case (no `--cases`);
+- every repetition in `settings.repetitions` completed for both suites;
+- sonar was graded on clean fixes (not `--no-sonar`, nothing pending validation);
+- both suites used the same model.
+
+A model is a config name without its ` (markdown)` / ` (sonar)` suffix, so quantizations (`Gemma-4-E4B-Q4` vs `-Q4-UD`) count as separate models. Its group comes from the `provider` in its `configs/*.yaml`: `openai` is commercial, `llama.cpp` is open source. Use `--group NAME=commercial|open` for a model the configs don't cover.
+
+`--list` shows every reproducibility run, whether it's full (and why not), and which one each model contributes. `--models NAME ...` restricts the comparison, and `-v` explains skipped runs. The script warns when the selected runs differ in `edit_mode` or repetition count, or when one group has no models.
+
+It writes `pass_rate` (pooled over every case × repetition trial, with a 95% Wilson interval), `classification`, `case_heatmap`, `agreement`, `sonar_funnel`, `efficiency` (pass rate against latency and completion tokens), `group_summary` (the mean of each group's models) and `cost` (one suite repetition and one passing trial, per model). It also writes the numbers behind the figures: `summary.csv` (per model × suite), `group_summary.csv`, `costs.csv`, `cost_assumptions.json` (every price and assumption used, with sources), and `selected_runs.json`, which records the run each model's numbers came from.
+
+### Cost estimates
+
+Both plotting scripts put a price in euros on each run. The rates are dated constants in `analysis/costs.py`, and every cost figure repeats them in a footnote.
+
+- **API models** (`provider: openai`) cost tokens × OpenAI's standard-tier list price ([pricing page](https://developers.openai.com/api/docs/pricing), as of 2026-09-28). gpt-5 is $1.25 input / $10.00 output and gpt-5-mini is $0.25 / $2.00, per 1M tokens. Completion tokens already include reasoning tokens, which are billed as output. Runs don't record cached-input tokens, so all input is priced at the uncached rate, which makes this an upper bound. USD is converted at the ECB reference rate of 1 € = 1.1403 $ (2026-09-25).
+- **Local models** (`provider: llama.cpp`) are costed on electricity alone: inference time × an assumed wall-power draw × €0.3163/kWh. That price is ARERA's Q3 2026 reference for the typical household customer, taxes included. Hardware depreciation is not counted. No power was measured during the runs, so the draw is an assumption: 90 W by default (an RTX 4050 Laptop GPU near its 60 W limit, plus CPU and platform), shown with a 60–120 W band.
+
+Only the model call is costed. Compile, test and SonarQube time is harness overhead that every model pays alike. Override any assumption for a run with `--local-watts`, `--local-watts-range LOW HIGH`, `--kwh-price` and `--usd-per-eur`. A model with no known price is reported as unpriced, never as free. To price a new API model, add it to `OPENAI_PRICES_USD_PER_1M`.
 

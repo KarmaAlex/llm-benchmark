@@ -1,7 +1,0 @@
-WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
-WARNING: sun.misc.Unsafe::arrayBaseOffset has been called by com.google.protobuf.UnsafeUtil$MemoryAccessor (file:/home/alex/.sonar/cache/0386cbfda2705cae493cae6453966cfe/sonar-scanner-engine-shaded-9.9.8.100196-all.jar)
-WARNING: Please consider reporting this to the maintainers of class com.google.protobuf.UnsafeUtil$MemoryAccessor
-WARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release
-WARNING: Final field cls in class org.sonar.java.checks.helpers.CredentialMethod has been mutated reflectively by class com.google.gson.internal.bind.ReflectiveTypeAdapterFactory$1 in unnamed module @508f4bb5 (file:/home/alex/.sonar/cache/339086da1811a812a1ebb7c624c020fc/sonar-java-plugin.jar)
-WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
-WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
