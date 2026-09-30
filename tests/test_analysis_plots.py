@@ -385,7 +385,8 @@ def test_site_rate_override_and_multi_gpu_jobs(tmp_path):
     parser = argparse.ArgumentParser()
     cost.add_cost_arguments(parser)
     assumptions = cost.assumptions_from_args(parser.parse_args(["--gpu-hour-price", "NVIDIA H200 NVL=2.00"]))
-    assert assumptions.gpu_hour_overridden == ("nvidia h200 nvl",)
+    assert assumptions.gpu_hour_overridden == ("NVIDIA H200 NVL",)
+    assert list(assumptions.gpu_hour_prices) == ["NVIDIA H200 NVL"]  # replaced, not duplicated
     assert "site rate" in assumptions.note({cost.GPU_HOURS})
 
     path = with_hardware(make_run(tmp_path, "2026-01-01_00-00-00", model="Model-B"),

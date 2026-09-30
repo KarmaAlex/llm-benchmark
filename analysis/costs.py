@@ -122,7 +122,7 @@ class CostAssumptions:
     local_watts_low: float = LOCAL_WATTS_RANGE[0]
     local_watts_high: float = LOCAL_WATTS_RANGE[1]
     prices_as_of: str = PRICES_AS_OF
-    # GPU name (lowercase) -> EUR per GPU-hour.
+    # GPU name as nvidia-smi reports it -> EUR per GPU-hour (matched ignoring case).
     gpu_hour_prices: dict[str, GpuHourPrice] = field(default_factory=lambda: default_gpu_hour_prices(USD_PER_EUR))
     gpu_hour_overridden: tuple[str, ...] = ()
 
@@ -130,7 +130,8 @@ class CostAssumptions:
         """The summed hourly rate of these GPUs, or None unless every one
         of them has a price (a run on any other machine is costed by its
         electricity instead)."""
-        prices = [self.gpu_hour_prices.get(name.lower()) for name in gpus]
+        by_name = {name.lower(): price for name, price in self.gpu_hour_prices.items()}
+        prices = [by_name.get(name.lower()) for name in gpus]
         if not prices or any(p is None for p in prices):
             return None
         return GpuHourPrice(*(sum(getattr(p, f) for p in prices) for f in ("eur", "low", "high")))
@@ -185,12 +186,12 @@ class CostAssumptions:
 
 
 def default_gpu_hour_prices(usd_per_eur: float) -> dict[str, GpuHourPrice]:
-    return {name.lower(): GpuHourPrice(*(usd / usd_per_eur for usd in prices))
+    return {name: GpuHourPrice(*(usd / usd_per_eur for usd in prices))
             for name, prices in GPU_HOUR_PRICES_USD.items()}
 
 
 def parse_gpu_hour_prices(values: list[str] | None) -> dict[str, GpuHourPrice]:
-    """`--gpu-hour-price "NAME=EUR"` arguments -> {name (lowercase): price}."""
+    """`--gpu-hour-price "NAME=EUR"` arguments -> {name: price}."""
     prices = {}
     for value in values or []:
         name, _, eur = value.rpartition("=")
@@ -201,7 +202,7 @@ def parse_gpu_hour_prices(values: list[str] | None) -> dict[str, GpuHourPrice]:
         if not name.strip() or rate < 0:
             raise ValueError(f"Bad --gpu-hour-price '{value}': expected \"GPU NAME=EUR\", "
                              "e.g. \"NVIDIA H200 NVL=3.20\"")
-        prices[name.strip().lower()] = GpuHourPrice(rate, rate, rate)
+        prices[name.strip()] = GpuHourPrice(rate, rate, rate)
     return prices
 
 
@@ -228,7 +229,12 @@ def assumptions_from_args(args: argparse.Namespace) -> CostAssumptions:
     except ValueError as e:
         raise SystemExit(str(e))
     return CostAssumptions(
-        gpu_hour_prices={**default_gpu_hour_prices(args.usd_per_eur), **overrides},
+        # A site rate replaces the market rate for its GPU, however it's capitalised.
+        gpu_hour_prices={
+            **{name: price for name, price in default_gpu_hour_prices(args.usd_per_eur).items()
+               if name.lower() not in {o.lower() for o in overrides}},
+            **overrides,
+        },
         gpu_hour_overridden=tuple(overrides),
         usd_per_eur=args.usd_per_eur,
         eur_per_kwh=args.kwh_price,

@@ -811,7 +811,15 @@ def cost_comparison(costs: pd.DataFrame, note: str) -> plt.Figure:
 
     suites = _suites(costs)
     order = model_order(costs)
-    labels = model_labels(costs)
+    basis_labels = {"api": "API fees", "gpu-hours": "rented GPU time", "electricity-measured": "own GPU, measured",
+                    "electricity": "own GPU, assumed", "unpriced": "unpriced"}
+    labels = {
+        model: f"{text}\n" + " + ".join(basis_labels.get(b, b) for b in basis.split("/"))
+        for model, text, basis in (
+            (model, text.split("\n")[0], costs[costs["model"] == model]["cost_basis"].iloc[0])
+            for model, text in model_labels(costs).items()
+        )
+    }
     metrics = (("cost_per_rep_eur", "cost of one full suite repetition"),
                ("cost_per_pass_eur", "cost per passing trial"))
     fig, axes = plt.subplots(len(metrics), len(suites), figsize=(5.6 * len(suites), (1.5 + 0.6 * len(order)) * 2),
@@ -852,6 +860,6 @@ def cost_comparison(costs: pd.DataFrame, note: str) -> plt.Figure:
             ax.set_xlabel(f"{label} (log scale)")
             ax.grid(axis="y", visible=False)
             ax.set_title(SUITE_LABELS.get(suite, suite))
-    fig.suptitle("What a run costs: API fees vs local electricity", x=0.01, ha="left", fontweight="bold", color=INK)
+    fig.suptitle("What a run costs  (label: how each model is priced)", x=0.01, ha="left", fontweight="bold", color=INK)
     _finish_with_legend(fig, _group_handles(costs), note=_wrap_note(note))
     return fig
