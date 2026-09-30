@@ -110,7 +110,7 @@ def test_complete_run_is_full(tmp_path):
 @pytest.mark.parametrize("kwargs, reason", [
     ({"suites": ("markdown",)}, "suite(s) not run: sonar"),
     ({"cases": ["md001"]}, "restricted to --cases md001"),
-    ({"sonar": False}, "run with --no-sonar"),
+    ({"sonar": False}, "sonar graded on tests_passed, not clean_fix"),
     ({"drop_rep": 2}, "markdown: 1/2 repetitions completed"),
 ])
 def test_incomplete_runs_are_not_full(tmp_path, kwargs, reason):
@@ -425,3 +425,45 @@ def test_cluster_run_on_an_unpriced_gpu_is_unpriced_not_household_electricity(tm
     assert set(trials["cost_basis"]) == {cost.UNPRICED}
     assert trials["cost_eur"].isna().all()
     assert trials["gpu_hours"].notna().all()  # still counted as a resource
+
+
+def test_label_positions_are_spread_without_collisions():
+    pytest.importorskip("seaborn")
+    from analysis.plots import _spread
+
+    placed = _spread([0.40, 0.41, 0.42, 0.90], gap=0.05)
+    assert placed[0] == 0.40 and all(b - a >= 0.05 - 1e-9 for a, b in zip(placed, placed[1:]))
+    # Crowded at the top: pushed back down under the ceiling.
+    top = _spread([0.97, 0.98, 0.99], gap=0.05)
+    assert top[-1] <= 1.0 and all(b - a >= 0.05 - 1e-9 for a, b in zip(top, top[1:]))
+    # More labels than fit: evenly spaced across the whole height.
+    assert _spread([0.5] * 5, gap=0.5) == [0.0, 0.25, 0.5, 0.75, 1.0]
+
+
+def test_no_sonar_run_is_full_once_validated_and_analyzed(tmp_path):
+    """--no-sonar only says how the run was made; validate_sonar_run and
+    analyze_sonar_run afterwards make it gradeable on clean fixes."""
+    path = make_run(tmp_path, "2026-01-01_00-00-00", sonar=False)
+    for report_path in path.glob("sonar/rep-*/report.json"):
+        report = json.loads(report_path.read_text())
+        report.update(validated=True, sonar_analyzed=True)
+        report_path.write_text(json.dumps(report))
+    run = json.loads((path / AGGREGATE_FILE_NAME).read_text())
+    run.update(aggregate_run(path, run["settings"]))
+    (path / AGGREGATE_FILE_NAME).write_text(json.dumps(run))
+
+    ref = ref_for(path)
+    assert (ref.full, ref.reason) == (True, "")
+    assert ref.settings["sonar"] is False
+
+
+def test_allocated_gpu_hours_use_the_generation_wall_time(tmp_path):
+    path = with_hardware(make_run(tmp_path, "2026-01-01_00-00-00", model="Model-B"), ["NVIDIA H200 NVL"])
+    for report_path in path.glob("sonar/rep-*/report.json"):
+        report = json.loads(report_path.read_text())
+        # Generated on the cluster in 15 min; validated on a laptop later.
+        report.update(summary={"wall_time": 3600.0}, generation_wall_time=900.0)
+        report_path.write_text(json.dumps(report))
+    trials = cost.trial_costs(ref_for(path), cost.CostAssumptions(), CATALOG, MODEL_IDS)
+    sonar = cost.cost_summary(trials).set_index("suite").loc["sonar"]
+    assert sonar["allocated_gpu_hours"] == pytest.approx(2 * 0.25)

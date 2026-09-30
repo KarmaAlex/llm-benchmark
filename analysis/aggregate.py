@@ -332,7 +332,9 @@ def rep_frame(ref: RunRef) -> pd.DataFrame:
         criterion = (suites.get(suite) or {}).get("criterion")
         for directory in repetition_directories(ref.path / suite):
             report = ResultsManager.load_report(directory)
-            rep_wall_time = (report.get("summary") or {}).get("wall_time")
+            # For a repetition generated with --no-sonar and validated later,
+            # only the generation ran on the model's machine.
+            rep_wall_time = report.get("generation_wall_time", (report.get("summary") or {}).get("wall_time"))
             rep = report.get("repetition") or int(directory.name.removeprefix("rep-"))
             if suite == "sonar" and criterion is None:
                 criterion = "clean_fix" if report.get("sonar_analyzed") else "tests_passed"

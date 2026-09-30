@@ -34,6 +34,7 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import seaborn as sns  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap, ListedColormap, to_rgb  # noqa: E402
+from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 from matplotlib.ticker import FuncFormatter, LogLocator, MaxNLocator, NullFormatter, PercentFormatter  # noqa: E402
 
@@ -461,15 +462,6 @@ def model_labels(frame: pd.DataFrame) -> dict[str, str]:
     return {m: f"{m}\n{short.get(g, g)}" for m, g in groups.items()}
 
 
-def model_colors(frame: pd.DataFrame) -> dict[str, str] | None:
-    """One categorical slot per model, in fixed order - or None past eight
-    models, where callers fall back to group colour plus direct labels."""
-    order = model_order(frame)
-    if len(order) > len(SERIES):
-        return None
-    return dict(zip(order, SERIES))
-
-
 def _group_handles(frame: pd.DataFrame) -> list[Patch]:
     present = [g for g in GROUPS if g in set(frame["group"])]
     return [Patch(facecolor=GROUP_COLORS[g], label=g) for g in present]
@@ -584,40 +576,98 @@ def agreement_distribution(cases: pd.DataFrame) -> plt.Figure:
     return fig
 
 
+FUNNEL_SHORT_LABELS = {"applied": "applied", "compiled": "compiled", "tests_passed": "tests",
+                       "resolved": "resolved", "clean_fix": "clean fix"}
+
+
 def sonar_funnel_comparison(funnel: pd.DataFrame) -> plt.Figure:
-    """Share of sonar trials reaching each pipeline stage, one line per model."""
+    """Share of sonar trials reaching each pipeline stage: one small panel
+    per model, its own line in its group colour over every other model's
+    in faint grey. Identity comes from the panel title, not from telling
+    nine-plus colours apart, so it stays readable however many models
+    there are."""
     order = model_order(funnel)
-    colors = model_colors(funnel)
-    fig, ax = plt.subplots(figsize=(8.5, 4.2))
+    ncols = 3 if len(order) <= 9 else 4
+    nrows = math.ceil(len(order) / ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(3.4 * ncols, 2.5 * nrows + 0.6),
+                             sharex=True, sharey=True, squeeze=False)
     x = np.arange(len(FUNNEL_STAGES))
-    handles = []
-    for model in order:
-        frame = funnel[funnel["model"] == model].set_index("stage").reindex(list(FUNNEL_STAGES))
+    rates = {
+        model: funnel[funnel["model"] == model].set_index("stage").reindex(list(FUNNEL_STAGES))
+        for model in order
+    }
+
+    for ax, model in zip(axes.flat, order):
+        for other in order:
+            if other != model:
+                ax.plot(x, rates[other]["rate"], color=BASELINE, linewidth=1, alpha=0.7, zorder=1)
+        frame = rates[model]
         group = frame["group"].dropna().iloc[0]
-        color = colors[model] if colors else GROUP_COLORS.get(group, INK_MUTED)
-        (line,) = ax.plot(x, frame["rate"], color=color, marker=GROUP_MARKERS.get(group, "o"), markersize=7,
-                          markeredgecolor=SURFACE, markeredgewidth=1.5, label=f"{model} ({group.lower()})")
-        handles.append(line)
-        if len(order) <= 4:
-            ax.text(x[-1] + 0.08, frame["rate"].iloc[-1], f"{model} {_pct(frame['rate'].iloc[-1])}", va="center",
-                    fontsize=8, color=INK_SECONDARY)
-    ax.set_xticks(x)
-    ax.set_xticklabels([STAGE_LABELS[s] for s in FUNNEL_STAGES])
-    ax.set_xlim(-0.3, len(FUNNEL_STAGES) - 1 + (1.3 if len(order) <= 4 else 0.3))
-    ax.set_ylim(0, 1.05)
-    _percent_axis(ax, x=False)
-    ax.set_ylabel("share of trials reaching the stage")
-    ax.grid(axis="x", visible=False)
-    ax.set_title("Sonar pipeline funnel by model  (marker: ● commercial, ■ open source)")
-    _finish_with_legend(fig, handles, ncol=min(len(handles), 3))
+        ax.plot(x, frame["rate"], color=GROUP_COLORS.get(group, INK_MUTED), marker=GROUP_MARKERS.get(group, "o"),
+                markersize=6, markeredgecolor=SURFACE, markeredgewidth=1.2, zorder=3)
+        end = frame["rate"].iloc[-1]
+        ax.annotate(_pct(end), (x[-1], end), xytext=(0, 7 if end < 0.9 else -13), textcoords="offset points",
+                    ha="center", fontsize=8, color=INK_SECONDARY)
+        ax.set_title(f"{model}\n{group.lower()}", fontsize=9, loc="left")
+        ax.set_ylim(0, 1.08)
+        ax.grid(axis="x", visible=False)
+        _percent_axis(ax, x=False)
+
+    for ax in axes.flat[len(order):]:
+        ax.set_visible(False)
+    for ax in axes[:, 0]:
+        ax.set_ylabel("trials reaching stage")
+    # The last visible panel in each column carries the stage labels.
+    for column in range(ncols):
+        visible = [axes[row, column] for row in range(nrows) if axes[row, column].get_visible()]
+        if visible:
+            visible[-1].set_xticks(x)
+            visible[-1].set_xticklabels([FUNNEL_SHORT_LABELS[s] for s in FUNNEL_STAGES], rotation=35, ha="right")
+            visible[-1].tick_params(axis="x", labelbottom=True)
+
+    fig.suptitle("Sonar pipeline funnel by model  (label = clean-fix rate)", x=0.01, ha="left",
+                 fontweight="bold", color=INK)
+    present = [g for g in GROUPS if g in set(funnel["group"])]
+    handles = [Line2D([], [], color=GROUP_COLORS[g], marker=GROUP_MARKERS[g], markersize=6, label=g) for g in present]
+    handles.append(Line2D([], [], color=BASELINE, linewidth=1, label="other models"))
+    _finish_with_legend(fig, handles)
     return fig
+
+
+def _spread(positions: list[float], gap: float, low: float = 0.0, high: float = 1.0) -> list[float]:
+    """Nudge sorted label positions apart to at least `gap`, staying within
+    [low, high] - as close to where they started as that allows."""
+    placed = list(positions)
+    for i in range(1, len(placed)):
+        placed[i] = max(placed[i], placed[i - 1] + gap)
+    if placed and placed[-1] > high:
+        placed[-1] = high
+        for i in range(len(placed) - 2, -1, -1):
+            placed[i] = min(placed[i], placed[i + 1] - gap)
+    if placed and placed[0] < low:  # too many labels for the height: space them evenly
+        step = (high - low) / max(len(placed) - 1, 1)
+        placed = [low + i * step for i in range(len(placed))]
+    return placed
+
+
+def _label_column(ax, fig: plt.Figure, xs, ys, labels, y_top: float) -> None:
+    """Label points from a column just right of the axes, one leader line
+    each: labels can't collide however the points cluster."""
+    height_in = ax.get_position().height * fig.get_figheight()
+    order = sorted(range(len(labels)), key=lambda i: ys[i])
+    targets = _spread([ys[i] / y_top for i in order], gap=0.16 / height_in)
+    for i, target in zip(order, targets):
+        ax.annotate(labels[i], (xs[i], ys[i]), xytext=(1.04, target), textcoords="axes fraction",
+                    va="center", fontsize=8, color=INK_SECONDARY, annotation_clip=False,
+                    arrowprops={"arrowstyle": "-", "color": BASELINE, "linewidth": 0.8,
+                                "shrinkA": 2, "shrinkB": 5})
 
 
 def efficiency_scatter(summary: pd.DataFrame) -> plt.Figure:
     """Pass rate against cost: mean latency (top) and mean completion tokens
     (bottom), per suite. Separate panels, one scale each."""
     suites = _suites(summary)
-    fig, axes = plt.subplots(2, len(suites), figsize=(5.4 * len(suites), 7.2), squeeze=False)
+    fig, axes = plt.subplots(2, len(suites), figsize=(7.0 * len(suites), 7.6), squeeze=False)
     metrics = (("latency_mean", "mean latency per case (s, log scale)"),
                ("tokens_mean", "mean completion tokens per case (log scale)"))
     for row, (column, label) in zip(axes, metrics):
@@ -626,10 +676,6 @@ def efficiency_scatter(summary: pd.DataFrame) -> plt.Figure:
             for group, sub in frame.groupby("group"):
                 ax.scatter(sub[column], sub["pass_rate"], s=70, color=GROUP_COLORS.get(group, INK_MUTED),
                            marker=GROUP_MARKERS.get(group, "o"), edgecolor=SURFACE, linewidth=1.5, zorder=3)
-            # Alternate above/below so neighbouring labels don't pile up.
-            for i, (_index, r) in enumerate(frame.sort_values(column).iterrows()):
-                ax.annotate(r["model"], (r[column], r["pass_rate"]), xytext=(6, 6 if i % 2 == 0 else -13),
-                            textcoords="offset points", fontsize=8, color=INK_SECONDARY)
             ax.set_xscale("log")
             ax.xaxis.set_major_locator(LogLocator(base=10, subs=(1, 2, 5)))
             ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _pos: f"{v:g}"))
@@ -641,7 +687,10 @@ def efficiency_scatter(summary: pd.DataFrame) -> plt.Figure:
             ax.set_title(SUITE_LABELS.get(suite, suite))
             lo, hi = frame[column].min(), frame[column].max()
             if lo > 0 and hi > 0:
-                ax.set_xlim(lo / 2, hi * 2.5)
+                ax.set_xlim(lo / 2, hi * 2)
+            labelled = frame.dropna(subset=[column, "pass_rate"])
+            _label_column(ax, fig, labelled[column].tolist(), labelled["pass_rate"].tolist(),
+                          labelled["model"].tolist(), y_top=1.08)
     fig.suptitle("Accuracy vs cost", x=0.01, ha="left", fontweight="bold", color=INK)
     _finish_with_legend(fig, _group_handles(summary))
     return fig

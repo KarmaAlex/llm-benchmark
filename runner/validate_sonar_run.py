@@ -61,6 +61,11 @@ def main() -> None:
     summary = compute_summary(results, previous_wall_time + validation_time)
     print_report(results, summary)
 
+    # Validation often runs somewhere else later (no GPU needed), so keep the
+    # generation run's own wall time apart from the total: it's how long the
+    # model's machine was held (see analysis/costs.py, allocated GPU-hours).
+    if not report.get("validated"):
+        report.setdefault("generation_wall_time", previous_wall_time)
     report["summary"] = summary
     report["cases"] = [asdict(r) for r in results]
     report["validated"] = True

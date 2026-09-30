@@ -223,3 +223,28 @@ def test_shared_cases_are_counted_in_the_summary():
     alone = MarkdownCaseResult(case_id="b", difficulty=1, matched=True, execution_time=1.0, gpu_other_processes=0)
     assert power_summary([shared, alone])["gpu_shared_cases"] == 1
     assert power_summary([result(1.0)])["gpu_shared_cases"] is None
+
+
+def test_first_validation_keeps_the_generation_wall_time(tmp_path, monkeypatch):
+    import json
+
+    from runner import validate_sonar_run
+
+    run = tmp_path / "rep-01"
+    (run / "S1000" / "project").mkdir(parents=True)
+    case = {"case_id": "S1000", "edit_mode": "structured", "applied": True, "compiled": False,
+            "execution_time": 2.0, "compile_time": 0.0}
+    (run / "report.json").write_text(json.dumps(
+        {"validated": False, "summary": {"wall_time": 90.0}, "cases": [case]}))
+    monkeypatch.setattr(validate_sonar_run, "validate_case", lambda directory: {"compiled": True})
+    monkeypatch.setattr(validate_sonar_run, "print_report", lambda *a: None)
+    monkeypatch.setattr("sys.argv", ["validate_sonar_run", str(run)])
+
+    validate_sonar_run.main()
+    report = json.loads((run / "report.json").read_text())
+    assert report["validated"] is True
+    assert report["generation_wall_time"] == 90.0
+    assert report["summary"]["wall_time"] >= 90.0
+
+    validate_sonar_run.main()  # a re-validation must not overwrite it with the combined time
+    assert json.loads((run / "report.json").read_text())["generation_wall_time"] == 90.0

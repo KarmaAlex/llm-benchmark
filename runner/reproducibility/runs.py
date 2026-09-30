@@ -61,8 +61,8 @@ def is_full_run(run: dict, path: Path) -> tuple[bool, str]:
         return False, f"suite(s) not run: {', '.join(missing)}"
     if settings.get("cases"):
         return False, f"restricted to --cases {' '.join(settings['cases'])}"
-    if not settings.get("sonar", True):
-        return False, "run with --no-sonar"
+    # A run made with --no-sonar is fine once validate_sonar_run and
+    # analyze_sonar_run have graded it: what counts is the criterion below.
     if run.get("pending_validation"):
         return False, f"not yet validated: {', '.join(run['pending_validation'])}"
     missing = [s for s in SUITES if s not in suites]
