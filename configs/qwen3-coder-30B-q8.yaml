@@ -1,4 +1,4 @@
-name: Qwen3-Coder-30B-FP16
+name: Qwen3-Coder-30B-Q8
 provider: llama.cpp
 model: models/Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf
 temperature: 0
