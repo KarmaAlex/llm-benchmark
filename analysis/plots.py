@@ -23,6 +23,7 @@ lightness). Identity is always backed by a legend or an axis label.
 """
 
 import math
+import textwrap
 from pathlib import Path
 
 import matplotlib
@@ -39,7 +40,7 @@ from matplotlib.patches import Patch  # noqa: E402
 from matplotlib.ticker import FuncFormatter, LogLocator, MaxNLocator, NullFormatter, PercentFormatter  # noqa: E402
 
 from analysis.aggregate import COMMERCIAL, GROUPS, OPEN_SOURCE, SONAR_STAGES, UNKNOWN  # noqa: E402
-from analysis.statistics import CLASSIFICATION_ORDER, FUNNEL_STAGES, GROUP_METRICS  # noqa: E402
+from analysis.statistics import CLASSIFICATION_ORDER, FUNNEL_STAGES, GROUP_METRICS, RADAR_AXES  # noqa: E402
 
 # --------------------------------------------------------------------------- #
 # palette and style
@@ -181,15 +182,17 @@ def _percent_axis(axis, *, x: bool) -> None:
     (axis.xaxis if x else axis.yaxis).set_major_formatter(formatter)
 
 
-def _finish_with_legend(fig: plt.Figure, handles, ncol: int | None = None, note: str | None = None) -> None:
+def _finish_with_legend(fig: plt.Figure, handles, ncol: int | None = None, note: str | None = None,
+                        h_pad: float | None = None) -> None:
     """Lay the figure out with a legend row (or rows) reserved underneath,
     and optionally a muted footnote under that (e.g. cost assumptions)."""
     handles = list(handles)
     ncol = ncol or max(len(handles), 1)
     rows = math.ceil(len(handles) / ncol)
-    note_height = 0.28 * len(note.splitlines()) if note else 0.0
+    # 7.5 pt footnote lines are ~0.15 in apart.
+    note_height = 0.15 * len(note.splitlines()) + 0.05 if note else 0.0
     bottom = (0.3 * rows + note_height + 0.15) / fig.get_figheight()
-    fig.tight_layout(rect=(0, bottom, 1, 1))
+    fig.tight_layout(rect=(0, bottom, 1, 1), h_pad=h_pad)
     if handles:
         fig.legend(
             handles=handles,
@@ -862,4 +865,88 @@ def cost_comparison(costs: pd.DataFrame, note: str) -> plt.Figure:
             ax.set_title(SUITE_LABELS.get(suite, suite))
     fig.suptitle("What a run costs  (label: how each model is priced)", x=0.01, ha="left", fontweight="bold", color=INK)
     _finish_with_legend(fig, _group_handles(costs), note=_wrap_note(note))
+    return fig
+
+
+# --------------------------------------------------------------------------- #
+# model selection
+# --------------------------------------------------------------------------- #
+
+
+def radar_note(weights: dict[str, float] | None = None) -> str:
+    from analysis.statistics import RADAR_LOG_SCALES
+
+    (fast, slow), (cheap, dear) = RADAR_LOG_SCALES["speed"], RADAR_LOG_SCALES["low_cost"]
+    if weights is None or len(set(weights.values())) == 1:
+        overall = "Overall = unweighted mean of the five."
+    else:
+        overall = "Overall = weighted mean (" + ", ".join(
+            f"{RADAR_AXES[a].replace(chr(10), ' ')} {w:g}" for a, w in weights.items()) + ")."
+    return (
+        "Outer = better. Markdown accuracy and sonar clean fixes: share of all trials passed.  "
+        "Consistency: share of repetitions giving a case's most common output, averaged over both suites.  "
+        f"Speed: mean latency per case on a log scale, {fast:g} s at the rim to {slow:g} s at the centre.  "
+        f"Low cost: one repetition of both suites on a log scale, \u20ac{cheap:g} at the rim to "
+        f"\u20ac{dear:g} at the centre.  {overall}  "
+        "Costs mix API fees, rented GPU time and own-GPU electricity (see the cost figure); "
+        "latency mixes API, H200 and laptop hardware."
+    )
+
+
+def radar_comparison(scores: pd.DataFrame, weights: dict[str, float] | None = None) -> plt.Figure:
+    """One radar per model - quality, consistency, speed and cost on axes
+    where outer is always better - ranked by overall score, each drawn over
+    every other model's outline in grey so a panel reads on its own and
+    against the field. `scores` comes from statistics.radar_scores."""
+    axes_keys = list(RADAR_AXES)
+    angles = np.linspace(0, 2 * np.pi, len(axes_keys), endpoint=False)
+    closed = np.append(angles, angles[0])
+
+    def outline(row) -> np.ndarray:
+        values = row[axes_keys].astype(float).fillna(0).to_numpy()
+        return np.append(values, values[0])
+
+    count = len(scores)
+    ncols = 3 if count <= 9 else 4
+    nrows = math.ceil(count / ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(3.8 * ncols, 4.2 * nrows + 1.2),
+                             subplot_kw={"projection": "polar"}, squeeze=False)
+    for rank, (ax, (_index, row)) in enumerate(zip(axes.flat, scores.iterrows()), start=1):
+        for _other_index, other in scores.iterrows():
+            if other["model"] != row["model"]:
+                ax.plot(closed, outline(other), color=BASELINE, linewidth=0.8, alpha=0.8, zorder=1)
+        color = GROUP_COLORS.get(row["group"], INK_MUTED)
+        values = outline(row)
+        ax.fill(closed, values, color=color, alpha=0.12, zorder=2)
+        ax.plot(closed, values, color=color, linewidth=2, zorder=3)
+        ax.scatter(angles, values[:-1], s=22, color=color, edgecolor=SURFACE, linewidth=1, zorder=4)
+
+        ax.set_ylim(0, 1)
+        ax.set_yticks([0.25, 0.5, 0.75, 1.0])
+        ax.set_yticklabels([])
+        ax.set_xticks(angles)
+        ax.set_xticklabels([RADAR_AXES[k] for k in axes_keys], fontsize=7.5, color=INK_SECONDARY)
+        ax.tick_params(axis="x", pad=1)
+        ax.grid(color=GRID, linewidth=0.8)
+        ax.spines["polar"].set_color(GRID)
+        ax.set_theta_offset(np.pi / 2)  # first axis at the top
+        ax.set_theta_direction(-1)
+        overall = "n/a" if pd.isna(row["overall"]) else f"{row['overall']:.2f}"
+        ax.set_title(f"#{rank}  {row['model']}\n{row['group'].lower()} · overall {overall}",
+                     fontsize=9, loc="center", pad=22)
+    for ax in axes.flat[count:]:
+        ax.set_visible(False)
+
+    fig.suptitle("Which model to pick: quality, consistency, speed and cost  (ranked by overall score)",
+                 x=0.01, ha="left", fontweight="bold", color=INK)
+    present = [g for g in GROUPS if g in set(scores["group"])]
+    handles = [Patch(facecolor=GROUP_COLORS[g], alpha=0.6, label=g) for g in present]
+    handles.append(Line2D([], [], color=BASELINE, linewidth=1, label="other models"))
+    # ~14 characters of 7.5 pt text per inch of figure width.
+    note = "\n".join(textwrap.wrap(radar_note(weights), width=int(fig.get_figwidth() * 14)))
+    # Polar tick labels sit outside the axes box tight_layout measures, so
+    # rows need extra room to keep them clear of the next row's titles.
+    _finish_with_legend(fig, handles, note=note, h_pad=4.5)
+    # The suptitle needs its own band above the first row's (padded) titles.
+    fig.subplots_adjust(top=fig.subplotpars.top - 0.45 / fig.get_figheight())
     return fig

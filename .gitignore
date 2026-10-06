@@ -8,3 +8,5 @@ results/test/
 .sonar-server.json
 .cache/
 .vscode
+results/
+!resuts/.*\.zip

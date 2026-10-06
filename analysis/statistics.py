@@ -101,3 +101,79 @@ def group_summary(summary: pd.DataFrame) -> pd.DataFrame:
     result = grouped[columns].mean()
     result["models"] = grouped["model"].nunique()
     return result.reset_index()
+
+
+# Radar axes, in drawing order; every score runs 0 (worst) to 1 (best).
+RADAR_AXES = {
+    "markdown_accuracy": "markdown\naccuracy",
+    "sonar_clean_fix": "sonar\nclean fixes",
+    "consistency": "consistency",
+    "speed": "speed",
+    "low_cost": "low cost",
+}
+
+# Fixed log scales for the two unbounded measures: (value scoring 1, value
+# scoring 0). Fixed rather than relative to the models compared, so a model's
+# scores don't change when another model is added or dropped, and a 7x latency
+# gap isn't stretched to fill the axis the way a 1000x cost gap does.
+RADAR_LOG_SCALES = {
+    "speed": (1.0, 60.0),        # mean latency per case, seconds
+    "low_cost": (1e-4, 10.0),    # EUR for one repetition of both suites
+}
+
+
+def _log_score(values: pd.Series, best: float, worst: float) -> pd.Series:
+    """1 at `best`, 0 at `worst`, log-spaced between, clipped to [0, 1]."""
+    logs = values.where(values > 0).map(math.log)
+    return ((math.log(worst) - logs) / (math.log(worst) - math.log(best))).clip(0, 1)
+
+
+def parse_radar_weights(values: list[str] | None) -> dict[str, float]:
+    """`--radar-weight AXIS=W` arguments -> {axis: weight}; unnamed axes keep 1."""
+    weights = {axis: 1.0 for axis in RADAR_AXES}
+    for value in values or []:
+        axis, _, weight = value.partition("=")
+        try:
+            weights[axis.strip()] = float(weight)
+        except ValueError:
+            raise ValueError(f"Bad --radar-weight '{value}': expected AXIS=NUMBER") from None
+        if axis.strip() not in RADAR_AXES or weights[axis.strip()] < 0:
+            raise ValueError(f"Bad --radar-weight '{value}': axis must be one of {', '.join(RADAR_AXES)}, "
+                             "weight >= 0")
+    if not any(weights.values()):
+        raise ValueError("--radar-weight: at least one axis needs a positive weight")
+    return weights
+
+
+def radar_scores(summary: pd.DataFrame, weights: dict[str, float] | None = None) -> pd.DataFrame:
+    """One row per model: the raw measures behind each radar axis, the 0-1
+    score drawn for it, and the weighted overall score (equal weights by
+    default), most to least.
+
+    Quality and consistency are absolute rates. Speed (mean latency per case
+    across both suites) and cost (one repetition of both suites, from
+    `cost_per_rep_eur`) use the fixed log scales in RADAR_LOG_SCALES."""
+    weights = weights or {axis: 1.0 for axis in RADAR_AXES}
+    rows = []
+    for (model, group), frame in summary.groupby(["model", "group"], sort=False):
+        by_suite = frame.set_index("suite")
+        rate = lambda suite: by_suite["pass_rate"].get(suite, math.nan)
+        costs = by_suite["cost_per_rep_eur"] if "cost_per_rep_eur" in by_suite else pd.Series(dtype=float)
+        rows.append({
+            "model": model,
+            "group": group,
+            "markdown_accuracy": rate("markdown"),
+            "sonar_clean_fix": rate("sonar"),
+            "consistency": by_suite["mean_agreement_rate"].mean(),
+            "latency_s": by_suite["latency_mean"].mean(),
+            # NaN unless every suite has a price: a partial sum would look cheap.
+            "cost_per_rep_eur": costs.sum() if len(costs) and costs.notna().all() else math.nan,
+        })
+    scores = pd.DataFrame(rows)
+    if scores.empty:
+        return scores
+    scores["speed"] = _log_score(scores["latency_s"], *RADAR_LOG_SCALES["speed"])
+    scores["low_cost"] = _log_score(scores["cost_per_rep_eur"], *RADAR_LOG_SCALES["low_cost"])
+    total = sum(weights.values())
+    scores["overall"] = sum(scores[axis] * weight for axis, weight in weights.items()) / total
+    return scores.sort_values("overall", ascending=False, na_position="last").reset_index(drop=True)

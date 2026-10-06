@@ -468,3 +468,68 @@ def test_allocated_gpu_hours_use_the_generation_wall_time(tmp_path):
     trials = cost.trial_costs(ref_for(path), cost.CostAssumptions(), CATALOG, MODEL_IDS)
     sonar = cost.cost_summary(trials).set_index("suite").loc["sonar"]
     assert sonar["allocated_gpu_hours"] == pytest.approx(2 * 0.25)
+
+
+def radar_summary():
+    import pandas as pd
+
+    rows = []
+    for model, group, md, sonar, agreement, latency, cost_rep in [
+        ("Fast-Cheap", "Open source", 0.6, 0.2, 1.0, 1.0, 0.0001),
+        ("Slow-Dear", "Commercial", 1.0, 0.9, 0.8, 60.0, 10.0),
+    ]:
+        for suite, rate in (("markdown", md), ("sonar", sonar)):
+            rows.append({"model": model, "group": group, "suite": suite, "pass_rate": rate,
+                         "mean_agreement_rate": agreement, "latency_mean": latency,
+                         "cost_per_rep_eur": cost_rep / 2})
+    return pd.DataFrame(rows)
+
+
+def test_radar_scores_use_fixed_log_scales_and_rank_by_overall():
+    scores = stats.radar_scores(radar_summary()).set_index("model")
+    fast, slow = scores.loc["Fast-Cheap"], scores.loc["Slow-Dear"]
+    # Anchors: 1 s / EUR 0.0001 score 1, 60 s / EUR 10 score 0.
+    assert (fast["speed"], fast["low_cost"]) == (pytest.approx(1.0), pytest.approx(1.0))
+    assert (slow["speed"], slow["low_cost"]) == (pytest.approx(0.0), pytest.approx(0.0))
+    assert fast["cost_per_rep_eur"] == pytest.approx(0.0001)   # both suites summed
+    assert slow["sonar_clean_fix"] == 0.9 and slow["consistency"] == 0.8
+    assert fast["overall"] == pytest.approx((0.6 + 0.2 + 1 + 1 + 1) / 5)
+    assert list(stats.radar_scores(radar_summary())["model"]) == ["Fast-Cheap", "Slow-Dear"]
+
+
+def test_radar_weights_change_the_ranking():
+    weights = stats.parse_radar_weights(["sonar_clean_fix=10", "markdown_accuracy=10"])
+    ranked = stats.radar_scores(radar_summary(), weights)
+    assert list(ranked["model"]) == ["Slow-Dear", "Fast-Cheap"]
+    for bad in (["speed=-1"], ["nonsense=1"], ["speed=x"]):
+        with pytest.raises(ValueError, match="--radar-weight"):
+            stats.parse_radar_weights(bad)
+
+
+def test_radar_cost_is_missing_when_a_suite_is_unpriced():
+    summary = radar_summary()
+    summary.loc[(summary["model"] == "Slow-Dear") & (summary["suite"] == "sonar"), "cost_per_rep_eur"] = float("nan")
+    slow = stats.radar_scores(summary).set_index("model").loc["Slow-Dear"]
+    assert math.isnan(slow["cost_per_rep_eur"]) and math.isnan(slow["overall"])
+
+
+def test_radar_figure_renders(tmp_path):
+    pytest.importorskip("seaborn")
+    from analysis import plots
+
+    weights = stats.parse_radar_weights(["sonar_clean_fix=2"])
+    fig = plots.radar_comparison(stats.radar_scores(radar_summary(), weights), weights)
+    assert "weighted mean" in fig.texts[-1].get_text()
+    assert plots.save(fig, tmp_path, "radar").stat().st_size > 0
+
+
+def test_compare_models_reads_runs_from_a_results_subfolder(tmp_path, monkeypatch, capsys):
+    pytest.importorskip("seaborn")
+    from analysis import compare_models
+
+    moved = tmp_path / "04-10-26-all_models"
+    moved.mkdir()
+    make_run(moved, "2026-01-01_00-00-00_Model-A", model="Model-A")
+    monkeypatch.setattr("sys.argv", ["compare_models", "--results-dir", str(moved), "--list"])
+    compare_models.main()
+    assert "2026-01-01_00-00-00_Model-A" in capsys.readouterr().out
