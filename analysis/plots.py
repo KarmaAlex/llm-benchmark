@@ -3,23 +3,34 @@ matplotlib/seaborn figures for reproducibility runs.
 
 Every function takes the tidy frames from analysis/aggregate.py (or
 analysis/statistics.py) and returns a Figure; saving is left to the caller
-(`save`). Two families:
+(`save`). The callers draw one suite per figure, passing that suite's rows,
+so figures stay readable at page width. Three families:
 
-  single run   classification_breakdown, pass_matrix, repetition_pass_rate,
-               case_stability, sonar_stage_funnel, latency_tokens,
-               markdown_by_difficulty
+  single run   pass_matrix, repetition_pass_rate, case_stability,
+               sonar_stage_funnel, latency_tokens, cost_by_case
   comparison   pass_rate_comparison, classification_comparison,
-               case_pass_heatmap, agreement_distribution,
-               sonar_funnel_comparison, efficiency_scatter,
-               group_summary_plot
+               case_pass_heatmap, sonar_funnel_comparison, pass_rate_scatter
+               (efficiency vs cost, and latency), pass_rate_vs_size,
+               cost_comparison
+  selection    radar_comparison and scorecard (one suite each)
 
 Colours are fixed roles, never assigned by rank: the case classifications
-use an ordinal blue ramp for the three stable levels with orange for flaky
-and grey for harness errors; groups are blue (commercial) / orange (open
-source); sonar stages are an ordinal blue ramp for where a trial stopped,
-with green for the one passing stage. Each palette was checked
-with the dataviz skill's validator (CVD separation, contrast, monotone
-lightness). Identity is always backed by a legend or an axis label.
+use an ordinal blue ramp for the three stable levels with magenta for flaky
+(not orange, which means open source everywhere else) and grey for harness
+errors; groups are blue (commercial) / orange (open source); sonar stages
+are an ordinal blue ramp for where a trial stopped, with green for the one
+passing stage. Each palette was checked with the dataviz skill's validator
+(CVD separation, contrast, monotone lightness). Identity is always backed by
+a legend or an axis label.
+
+All figure text is in Italian (the figures go into an Italian thesis), with
+Italian number formatting from analysis/italian.py; identifiers, data values
+and the tables stay in English.
+
+Figures are meant for a LaTeX document: PDFs embed TrueType fonts (Type 3
+fonts trip some PDF checks), and `configure(captions=True)` leaves the
+figure title and footnote out of the image - they are kept on the figure as
+`fig.caption_parts` for the caller to write out as caption text.
 """
 
 import math
@@ -39,8 +50,9 @@ from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 from matplotlib.ticker import FuncFormatter, LogLocator, MaxNLocator, NullFormatter, PercentFormatter  # noqa: E402
 
+from analysis import italian  # noqa: E402
 from analysis.aggregate import COMMERCIAL, GROUPS, OPEN_SOURCE, SONAR_STAGES, UNKNOWN  # noqa: E402
-from analysis.statistics import CLASSIFICATION_ORDER, FUNNEL_STAGES, GROUP_METRICS, RADAR_AXES  # noqa: E402
+from analysis.statistics import CLASSIFICATION_ORDER, FUNNEL_STAGES, RADAR_ACCURACY_LABELS, RADAR_AXES  # noqa: E402
 
 # --------------------------------------------------------------------------- #
 # palette and style
@@ -63,11 +75,20 @@ CLASSIFICATION_COLORS = {
     "identical": "#184f95",
     "equivalent": "#3987e5",
     "outcome-stable": "#86b6ef",
-    "flaky": "#eb6834",
+    "flaky": "#b5367a",
     "harness-error": INK_MUTED,
 }
 
+CLASSIFICATION_LABELS = {
+    "identical": "identico",
+    "equivalent": "equivalente",
+    "outcome-stable": "esito stabile",
+    "flaky": "instabile",
+    "harness-error": "errore del sistema di test",
+}
+
 GROUP_COLORS = {COMMERCIAL: SERIES[0], OPEN_SOURCE: SERIES[1], UNKNOWN: INK_MUTED}
+GROUP_LABELS = {COMMERCIAL: "Commerciale", OPEN_SOURCE: "Open source", UNKNOWN: "Sconosciuto"}
 GROUP_MARKERS = {COMMERCIAL: "o", OPEN_SOURCE: "s", UNKNOWN: "D"}
 
 STAGE_COLORS = {
@@ -81,12 +102,12 @@ STAGE_COLORS = {
     "clean_fix": "#0ca30c",
 }
 STAGE_LABELS = {
-    "not_applied": "not applied",
-    "applied": "applied",
-    "compiled": "compiled",
-    "tests_passed": "tests passed",
-    "resolved": "issue resolved",
-    "clean_fix": "clean fix",
+    "not_applied": "non applicata",
+    "applied": "applicata",
+    "compiled": "compilata",
+    "tests_passed": "test superati",
+    "resolved": "problema risolto",
+    "clean_fix": "correzione pulita",
 }
 
 PASS_COLOR = SERIES[0]
@@ -95,8 +116,9 @@ ERROR_COLOR = SERIES[1]
 
 SEQUENTIAL = LinearSegmentedColormap.from_list("repro_blues", BLUE_RAMP)
 
-SUITE_LABELS = {"markdown": "Markdown extraction", "sonar": "Sonar fixes"}
-CRITERION_LABELS = {"matched": "exact JSON match", "clean_fix": "clean fix", "tests_passed": "tests passed"}
+SUITE_LABELS = {"markdown": "Estrazione da Markdown", "sonar": "Correzioni Sonar"}
+CRITERION_LABELS = {"matched": "corrispondenza JSON esatta", "clean_fix": "correzione pulita",
+                    "tests_passed": "test superati"}
 
 BAR_HEIGHT = 0.62
 
@@ -130,17 +152,61 @@ def apply_style() -> None:
         "lines.solid_capstyle": "round",
         "lines.solid_joinstyle": "round",
         "font.family": "sans-serif",
+        # TrueType, not Type 3, so the fonts embed cleanly in a LaTeX PDF.
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,
     })
 
 
 apply_style()
 
+# With captions on, figure titles and footnotes stay out of the image (the
+# document's caption carries them); see configure().
+_CAPTIONS = False
 
-def save(fig: plt.Figure, out_dir: Path, name: str, fmt: str = "png", dpi: int = 200) -> Path:
+
+def configure(*, captions: bool = False) -> None:
+    """`captions=True`: draw figures without their title and footnote, so
+    the text can go in a LaTeX caption instead (see `caption_text`)."""
+    global _CAPTIONS
+    _CAPTIONS = captions
+
+
+def _caption_parts(fig: plt.Figure) -> dict:
+    if not hasattr(fig, "caption_parts"):
+        fig.caption_parts = {}
+    return fig.caption_parts
+
+
+def _suptitle(fig: plt.Figure, title: str) -> None:
+    """The figure title - recorded for the caption, drawn unless captions
+    are on."""
+    _caption_parts(fig)["title"] = title.replace("\n", " ")
+    if not _CAPTIONS:
+        fig.suptitle(title, x=0.01, ha="left", fontweight="bold", color=INK)
+
+
+def caption_text(fig: plt.Figure) -> str:
+    """Title and footnote of a figure as one paragraph, for a caption."""
+    parts = getattr(fig, "caption_parts", {})
+    return "\n\n".join(parts[key] for key in ("title", "note") if parts.get(key))
+
+
+def save(fig: plt.Figure, out_dir: Path, name: str, fmt: str = "pdf", dpi: int = 200) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{name}.{fmt}"
     fig.savefig(path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
+    return path
+
+
+def save_captions(figures: dict[str, plt.Figure], out_dir: Path, fmt: str = "pdf") -> Path:
+    """Each figure's title and footnote as Markdown, to paste into the
+    document's captions when they were left out of the images."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / "captions.md"
+    sections = [f"## {name}.{fmt}\n\n{caption_text(fig)}" for name, fig in figures.items()]
+    path.write_text("# Didascalie delle figure\n\n" + "\n\n".join(sections) + "\n", encoding="utf-8")
     return path
 
 
@@ -157,17 +223,19 @@ def _suites(frame: pd.DataFrame) -> list[str]:
 def _suite_title(suite: str, criterion: str | None = None) -> str:
     title = SUITE_LABELS.get(suite, suite)
     if criterion:
-        title += f"  ·  pass = {CRITERION_LABELS.get(criterion, criterion)}"
+        title += f"  ·  successo = {CRITERION_LABELS.get(criterion, criterion)}"
     return title
 
 
 def _pct(rate: float) -> str:
     """Whole percent, except that a rate that isn't exactly 0 or 1 never
     rounds to 0% or 100% (199/200 is not 100%)."""
-    text = f"{rate:.0%}"
-    if (text == "100%" and rate < 1) or (text == "0%" and rate > 0):
-        text = f"{rate:.1%}"
-    return text
+    return italian.pct(rate)
+
+
+def _group_label(group: str, lower: bool = False) -> str:
+    label = GROUP_LABELS.get(group, group)
+    return label.lower() if lower else label
 
 
 def _ink_for(color: str) -> str:
@@ -185,7 +253,12 @@ def _percent_axis(axis, *, x: bool) -> None:
 def _finish_with_legend(fig: plt.Figure, handles, ncol: int | None = None, note: str | None = None,
                         h_pad: float | None = None) -> None:
     """Lay the figure out with a legend row (or rows) reserved underneath,
-    and optionally a muted footnote under that (e.g. cost assumptions)."""
+    and optionally a muted footnote under that (e.g. cost assumptions).
+    With captions on, the footnote is only recorded for the caption."""
+    if note:
+        _caption_parts(fig).setdefault("note", " ".join(note.split()))
+    if _CAPTIONS:
+        note = None
     handles = list(handles)
     ncol = ncol or max(len(handles), 1)
     rows = math.ceil(len(handles) / ncol)
@@ -239,31 +312,12 @@ def _stacked_hbar(ax, frame: pd.DataFrame, order: list[str], colors: dict, *, as
 # --------------------------------------------------------------------------- #
 
 
-def classification_breakdown(cases: pd.DataFrame, title: str) -> plt.Figure:
-    """Share of cases in each reproducibility class, one bar per suite."""
-    suites = _suites(cases)
-    counts = (
-        cases.groupby("suite")["classification"].value_counts().unstack(fill_value=0)
-        .reindex(index=suites, columns=CLASSIFICATION_ORDER, fill_value=0)
-    )
-    counts.index = [SUITE_LABELS.get(s, s) for s in counts.index]
-
-    fig, ax = plt.subplots(figsize=(8, 1.1 + 0.7 * len(suites)))
-    _stacked_hbar(ax, counts, list(CLASSIFICATION_ORDER), CLASSIFICATION_COLORS, as_share=True, min_label=0.04)
-    ax.set_xlim(0, 1)
-    _percent_axis(ax, x=True)
-    ax.set_xlabel("share of cases (segment labels = number of cases)")
-    ax.set_title(title)
-    _finish_with_legend(fig, _patches(CLASSIFICATION_COLORS))
-    return fig
-
-
 def pass_matrix(reps: pd.DataFrame, title: str) -> plt.Figure:
     """Cases x repetitions: pass, fail or harness error. A deterministic
     case is a solid row; a flaky one is striped."""
     suites = _suites(reps)
     height = max(len(reps[reps["suite"] == s]["case_id"].unique()) for s in suites)
-    fig, axes = plt.subplots(1, len(suites), figsize=(5.2 * len(suites), 1.4 + 0.28 * height), squeeze=False)
+    fig, axes = plt.subplots(1, len(suites), figsize=(5.2 * len(suites), max(3.2, 1.4 + 0.28 * height)), squeeze=False)
     cmap = ListedColormap([FAIL_COLOR, PASS_COLOR, ERROR_COLOR])
 
     for ax, suite in zip(axes[0], suites):
@@ -280,16 +334,16 @@ def pass_matrix(reps: pd.DataFrame, title: str) -> plt.Figure:
         for i, (k, n) in enumerate(passes.itertuples(index=False)):
             ax.text(matrix.shape[1] + 0.25, i + 0.5, f"{int(k)}/{int(n)}", va="center", fontsize=8, color=INK_SECONDARY)
         ax.set_title(SUITE_LABELS.get(suite, suite))
-        ax.set_xlabel("repetition")
+        ax.set_xlabel("ripetizione")
         ax.set_ylabel("")
         ax.tick_params(axis="both", length=0)
         ax.tick_params(axis="y", labelrotation=0)
 
-    fig.suptitle(title, x=0.01, ha="left", fontweight="bold", color=INK)
+    _suptitle(fig, title)
     _finish_with_legend(fig, [
-        Patch(facecolor=PASS_COLOR, label="pass"),
-        Patch(facecolor=FAIL_COLOR, label="fail"),
-        Patch(facecolor=ERROR_COLOR, label="harness error (excluded)"),
+        Patch(facecolor=PASS_COLOR, label="superato"),
+        Patch(facecolor=FAIL_COLOR, label="fallito"),
+        Patch(facecolor=ERROR_COLOR, label="errore del sistema di test (escluso)"),
     ])
     return fig
 
@@ -297,7 +351,7 @@ def pass_matrix(reps: pd.DataFrame, title: str) -> plt.Figure:
 def repetition_pass_rate(rates: pd.DataFrame, suites_meta: pd.DataFrame, title: str) -> plt.Figure:
     """Each repetition's pass rate with the mean and a +/-1 stdev band."""
     suites = _suites(rates)
-    fig, axes = plt.subplots(1, len(suites), figsize=(5.2 * len(suites), 3.4), squeeze=False, sharey=True)
+    fig, axes = plt.subplots(1, len(suites), figsize=(5.2 * len(suites), 3.8), squeeze=False, sharey=True)
     for ax, suite in zip(axes[0], suites):
         frame = rates[rates["suite"] == suite].sort_values("rep")
         meta = suites_meta[suites_meta["suite"] == suite].iloc[0]
@@ -306,18 +360,18 @@ def repetition_pass_rate(rates: pd.DataFrame, suites_meta: pd.DataFrame, title: 
         ax.axhline(mean, color=INK_MUTED, linewidth=1)
         ax.plot(frame["rep"], frame["pass_rate"], color=PASS_COLOR, marker="o", markersize=7,
                 markeredgecolor=SURFACE, markeredgewidth=1.5)
-        ax.text(frame["rep"].max() + 0.35, mean, f"mean {_pct(mean)}", va="center", fontsize=8, color=INK_SECONDARY,
+        ax.text(frame["rep"].max() + 0.35, mean, f"media {_pct(mean)}", va="center", fontsize=8, color=INK_SECONDARY,
                 bbox={"boxstyle": "square,pad=0.15", "facecolor": SURFACE, "edgecolor": "none"})
-        ax.set_title(f"{SUITE_LABELS.get(suite, suite)}  ·  sd {stdev * 100:.1f} pp")
+        ax.set_title(f"{SUITE_LABELS.get(suite, suite)}  ·  dev. std. {italian.number(stdev * 100, '.1f')} p.p.")
         ax.set_xticks(frame["rep"])
         ax.set_xlim(frame["rep"].min() - 0.5, frame["rep"].max() + 1.8)
-        ax.set_xlabel("repetition")
+        ax.set_xlabel("ripetizione")
         ax.grid(axis="x", visible=False)
         _percent_axis(ax, x=False)
-    axes[0][0].set_ylabel("pass rate (band = ±1 sd)")
+    axes[0][0].set_ylabel("tasso di successo\n(banda = ±1 dev. std.)")
     low = min(0.0, float(rates["pass_rate"].min()))
     axes[0][0].set_ylim(low, 1.05)
-    fig.suptitle(title, x=0.01, ha="left", fontweight="bold", color=INK)
+    _suptitle(fig, title)
     fig.tight_layout()
     return fig
 
@@ -327,7 +381,7 @@ def case_stability(cases: pd.DataFrame, title: str) -> plt.Figure:
     by classification, labelled with the number of distinct outputs."""
     suites = _suites(cases)
     height = max((cases["suite"] == s).sum() for s in suites)
-    fig, axes = plt.subplots(1, len(suites), figsize=(5.2 * len(suites), 1.4 + 0.28 * height), squeeze=False)
+    fig, axes = plt.subplots(1, len(suites), figsize=(5.2 * len(suites), max(3.2, 1.4 + 0.28 * height)), squeeze=False)
     for ax, suite in zip(axes[0], suites):
         frame = cases[cases["suite"] == suite].sort_values("case_id", ascending=False)
         y = np.arange(len(frame))
@@ -335,21 +389,21 @@ def case_stability(cases: pd.DataFrame, title: str) -> plt.Figure:
                 color=[CLASSIFICATION_COLORS.get(c, INK_MUTED) for c in frame["classification"]])
         for yi, rate, outputs, raw in zip(y, frame["agreement_rate"], frame["distinct_effective_outputs"],
                                           frame["distinct_raw_outputs"]):
-            label = f"{outputs} output{'s' if outputs != 1 else ''}"
+            label = f"{outputs} output"
             if raw != outputs:
-                label += f" ({raw} raw)"
+                label += f" ({raw} grezzi)"
             ax.text(min(rate, 1) + 0.02, yi, label, va="center", fontsize=7.5, color=INK_SECONDARY)
         ax.set_yticks(y)
         ax.set_yticklabels(frame["case_id"])
         ax.set_xlim(0, 1.45)
         ax.set_xticks([0, 0.25, 0.5, 0.75, 1])
         _percent_axis(ax, x=True)
-        ax.set_xlabel("agreement (reps giving the most common effective output)")
+        ax.set_xlabel("concordanza (ripetizioni con l'output effettivo più frequente)")
         ax.grid(axis="y", visible=False)
         ax.set_title(SUITE_LABELS.get(suite, suite))
-    fig.suptitle(title, x=0.01, ha="left", fontweight="bold", color=INK)
+    _suptitle(fig, title)
     present = [c for c in CLASSIFICATION_ORDER if c in set(cases["classification"])]
-    _finish_with_legend(fig, _patches(CLASSIFICATION_COLORS, keys=present))
+    _finish_with_legend(fig, _patches(CLASSIFICATION_COLORS, CLASSIFICATION_LABELS, keys=present))
     return fig
 
 
@@ -359,7 +413,7 @@ def sonar_stage_funnel(stages: pd.DataFrame, funnel: pd.DataFrame, title: str) -
     by_case = stages.pivot_table(index="case_id", columns="stage", values="count", aggfunc="sum", fill_value=0)
     by_case = by_case.reindex(columns=list(SONAR_STAGES), fill_value=0).sort_index()
     fig, (left, right) = plt.subplots(
-        1, 2, figsize=(11, 1.4 + 0.28 * len(by_case)), gridspec_kw={"width_ratios": [1, 1.6]}
+        1, 2, figsize=(11, max(3.2, 1.4 + 0.28 * len(by_case))), gridspec_kw={"width_ratios": [1, 1.6]}
     )
 
     frame = funnel.set_index("stage").reindex(list(FUNNEL_STAGES))
@@ -373,16 +427,16 @@ def sonar_stage_funnel(stages: pd.DataFrame, funnel: pd.DataFrame, title: str) -
     left.set_xlim(0, 1.45)
     left.set_xticks([0, 0.25, 0.5, 0.75, 1])
     _percent_axis(left, x=True)
-    left.set_xlabel("share of trials reaching the stage")
+    left.set_xlabel("quota di prove che raggiungono la fase")
     left.grid(axis="y", visible=False)
-    left.set_title("Pipeline funnel")
+    left.set_title("Avanzamento nella pipeline")
 
     _stacked_hbar(right, by_case, list(SONAR_STAGES), STAGE_COLORS, as_share=False, min_label=1)
-    right.set_xlabel("repetitions, by the last stage cleared")
-    right.set_title("Where each case stopped")
+    right.set_xlabel("ripetizioni, per ultima fase superata")
+    right.set_title("Dove si è fermato ciascun caso")
     right.xaxis.get_major_locator().set_params(integer=True)
 
-    fig.suptitle(title, x=0.01, ha="left", fontweight="bold", color=INK)
+    _suptitle(fig, title)
     _finish_with_legend(fig, _patches(STAGE_COLORS, STAGE_LABELS))
     return fig
 
@@ -393,8 +447,8 @@ def latency_tokens(reps: pd.DataFrame, title: str) -> plt.Figure:
     reps = reps[~reps["harness_error"]]
     suites = _suites(reps)
     height = max(reps[reps["suite"] == s]["case_id"].nunique() for s in suites)
-    fig, axes = plt.subplots(len(suites), 2, figsize=(11, (1.2 + 0.26 * height) * len(suites)), squeeze=False)
-    metrics = (("execution_time", "latency (s)"), ("completion_tokens", "completion tokens"))
+    fig, axes = plt.subplots(len(suites), 2, figsize=(11, max(3.2, (1.2 + 0.26 * height) * len(suites))), squeeze=False)
+    metrics = (("execution_time", "latenza (s)"), ("completion_tokens", "token generati"))
     for row, suite in zip(axes, suites):
         frame = reps[reps["suite"] == suite].sort_values("case_id")
         for ax, (column, label) in zip(row, metrics):
@@ -409,40 +463,7 @@ def latency_tokens(reps: pd.DataFrame, title: str) -> plt.Figure:
             ax.set_xlim(left=0)
             ax.grid(axis="y", visible=False)
             ax.set_title(f"{SUITE_LABELS.get(suite, suite)} · {label}")
-    fig.suptitle(title, x=0.01, ha="left", fontweight="bold", color=INK)
-    fig.tight_layout()
-    return fig
-
-
-def markdown_by_difficulty(cases: pd.DataFrame, title: str) -> plt.Figure | None:
-    """Markdown mean per-case pass rate by difficulty, and by category when
-    categories group several cases (one case per category says nothing the
-    pass matrix doesn't)."""
-    frame = cases[cases["suite"] == "markdown"]
-    if frame.empty or frame["difficulty"].isna().all():
-        return None
-    panels = [("difficulty", "difficulty")]
-    categories = frame["category"].dropna()
-    if not categories.empty and categories.nunique() < len(categories):
-        panels.append(("category", "category"))
-    fig, axes = plt.subplots(1, len(panels), figsize=(5.5 * len(panels), 3.6), squeeze=False)
-    for ax, (column, label) in zip(axes[0], panels):
-        grouped = frame.dropna(subset=[column]).groupby(column)["pass_rate"].agg(["mean", "count"])
-        if column == "difficulty":
-            grouped.index = [f"level {int(d)}" for d in grouped.index]
-        y = np.arange(len(grouped))[::-1]
-        ax.barh(y, grouped["mean"], height=BAR_HEIGHT, color=PASS_COLOR)
-        for yi, mean, count in zip(y, grouped["mean"], grouped["count"]):
-            ax.text(mean + 0.02, yi, f"{_pct(mean)}  (n={count})", va="center", fontsize=8, color=INK_SECONDARY)
-        ax.set_yticks(y)
-        ax.set_yticklabels(grouped.index)
-        ax.set_xlim(0, 1.3)
-        ax.set_xticks([0, 0.25, 0.5, 0.75, 1])
-        _percent_axis(ax, x=True)
-        ax.set_xlabel("mean per-case pass rate")
-        ax.grid(axis="y", visible=False)
-        ax.set_title(f"By {label}")
-    fig.suptitle(title, x=0.01, ha="left", fontweight="bold", color=INK)
+    _suptitle(fig, title)
     fig.tight_layout()
     return fig
 
@@ -461,13 +482,12 @@ def model_order(frame: pd.DataFrame) -> list[str]:
 
 def model_labels(frame: pd.DataFrame) -> dict[str, str]:
     groups = frame[["model", "group"]].drop_duplicates().set_index("model")["group"]
-    short = {COMMERCIAL: "commercial", OPEN_SOURCE: "open source", UNKNOWN: "unknown"}
-    return {m: f"{m}\n{short.get(g, g)}" for m, g in groups.items()}
+    return {m: f"{m}\n{_group_label(g, lower=True)}" for m, g in groups.items()}
 
 
 def _group_handles(frame: pd.DataFrame) -> list[Patch]:
     present = [g for g in GROUPS if g in set(frame["group"])]
-    return [Patch(facecolor=GROUP_COLORS[g], label=g) for g in present]
+    return [Patch(facecolor=GROUP_COLORS[g], label=_group_label(g)) for g in present]
 
 
 def pass_rate_comparison(summary: pd.DataFrame) -> plt.Figure:
@@ -494,11 +514,11 @@ def pass_rate_comparison(summary: pd.DataFrame) -> plt.Figure:
         ax.set_xlim(0, 1.4)
         ax.set_xticks([0, 0.25, 0.5, 0.75, 1])
         _percent_axis(ax, x=True)
-        ax.set_xlabel("pass rate over all trials (95% Wilson CI)")
+        ax.set_xlabel("tasso di successo su tutte le prove (IC di Wilson al 95%)")
         ax.grid(axis="y", visible=False)
         criterion = frame["criterion"].dropna().iloc[0] if frame["criterion"].notna().any() else None
         ax.set_title(_suite_title(suite, criterion))
-    fig.suptitle("Pass rate: commercial vs open-source models", x=0.01, ha="left", fontweight="bold", color=INK)
+    _suptitle(fig, "Tasso di successo: modelli commerciali e open source")
     _finish_with_legend(fig, _group_handles(summary))
     return fig
 
@@ -519,10 +539,10 @@ def classification_comparison(cases: pd.DataFrame) -> plt.Figure:
         _stacked_hbar(ax, counts, list(CLASSIFICATION_ORDER), CLASSIFICATION_COLORS, as_share=True, min_label=0.04)
         ax.set_xlim(0, 1)
         _percent_axis(ax, x=True)
-        ax.set_xlabel("share of cases (labels = number of cases)")
+        ax.set_xlabel("quota di casi (etichette = numero di casi)")
         ax.set_title(SUITE_LABELS.get(suite, suite))
-    fig.suptitle("How reproducible each model is", x=0.01, ha="left", fontweight="bold", color=INK)
-    _finish_with_legend(fig, _patches(CLASSIFICATION_COLORS))
+    _suptitle(fig, "Riproducibilità di ciascun modello")
+    _finish_with_legend(fig, _patches(CLASSIFICATION_COLORS, CLASSIFICATION_LABELS))
     return fig
 
 
@@ -540,47 +560,20 @@ def case_pass_heatmap(cases: pd.DataFrame) -> plt.Figure:
         )
         matrix.index = [labels[m].replace("\n", " · ") for m in matrix.index]
         sns.heatmap(matrix, ax=ax, cmap=SEQUENTIAL, vmin=0, vmax=1, linewidths=1.2, linecolor=SURFACE,
-                    cbar_kws={"format": PercentFormatter(1.0, decimals=0), "label": "pass rate", "shrink": 0.9})
+                    cbar_kws={"format": PercentFormatter(1.0, decimals=0), "label": "tasso di successo", "shrink": 0.9})
         ax.set_title(SUITE_LABELS.get(suite, suite))
         ax.set_xlabel("")
         ax.set_ylabel("")
         ax.tick_params(axis="both", length=0)
         ax.tick_params(axis="x", labelrotation=90)
         ax.tick_params(axis="y", labelrotation=0)
-    fig.suptitle("Per-case pass rate across repetitions", x=0.01, ha="left", fontweight="bold", color=INK)
+    _suptitle(fig, "Tasso di successo per caso nelle ripetizioni")
     fig.tight_layout()
     return fig
 
 
-def agreement_distribution(cases: pd.DataFrame) -> plt.Figure:
-    """Distribution of per-case agreement rates for each model."""
-    suites = _suites(cases)
-    order = model_order(cases)
-    labels = model_labels(cases)
-    fig, axes = plt.subplots(1, len(suites), figsize=(5.4 * len(suites), 1.6 + 0.95 * len(order)),
-                             squeeze=False, sharey=True)
-    for ax, suite in zip(axes[0], suites):
-        frame = cases[cases["suite"] == suite]
-        sns.boxplot(data=frame, y="model", x="agreement_rate", order=order, ax=ax, color=GRID, width=0.5,
-                    linewidth=0.8, fliersize=0, boxprops={"edgecolor": INK_MUTED},
-                    whiskerprops={"color": INK_MUTED}, capprops={"color": INK_MUTED}, medianprops={"color": INK})
-        sns.stripplot(data=frame, y="model", x="agreement_rate", order=order, hue="group", ax=ax,
-                      palette=GROUP_COLORS, size=5, jitter=0.2, linewidth=0.8, edgecolor=SURFACE, legend=False)
-        ax.set_yticks(range(len(order)))
-        ax.set_yticklabels([labels[m] for m in order])
-        ax.set_xlim(-0.02, 1.05)
-        _percent_axis(ax, x=True)
-        ax.set_xlabel("per-case agreement across reps")
-        ax.set_ylabel("")
-        ax.grid(axis="y", visible=False)
-        ax.set_title(SUITE_LABELS.get(suite, suite))
-    fig.suptitle("Output agreement across repetitions", x=0.01, ha="left", fontweight="bold", color=INK)
-    _finish_with_legend(fig, _group_handles(cases))
-    return fig
-
-
-FUNNEL_SHORT_LABELS = {"applied": "applied", "compiled": "compiled", "tests_passed": "tests",
-                       "resolved": "resolved", "clean_fix": "clean fix"}
+FUNNEL_SHORT_LABELS = {"applied": "applicata", "compiled": "compilata", "tests_passed": "test superati",
+                       "resolved": "risolta", "clean_fix": "pulita"}
 
 
 def sonar_funnel_comparison(funnel: pd.DataFrame) -> plt.Figure:
@@ -611,7 +604,7 @@ def sonar_funnel_comparison(funnel: pd.DataFrame) -> plt.Figure:
         end = frame["rate"].iloc[-1]
         ax.annotate(_pct(end), (x[-1], end), xytext=(0, 7 if end < 0.9 else -13), textcoords="offset points",
                     ha="center", fontsize=8, color=INK_SECONDARY)
-        ax.set_title(f"{model}\n{group.lower()}", fontsize=9, loc="left")
+        ax.set_title(f"{model}\n{_group_label(group, lower=True)}", fontsize=9, loc="left")
         ax.set_ylim(0, 1.08)
         ax.grid(axis="x", visible=False)
         _percent_axis(ax, x=False)
@@ -619,7 +612,7 @@ def sonar_funnel_comparison(funnel: pd.DataFrame) -> plt.Figure:
     for ax in axes.flat[len(order):]:
         ax.set_visible(False)
     for ax in axes[:, 0]:
-        ax.set_ylabel("trials reaching stage")
+        ax.set_ylabel("prove che raggiungono\nla fase")
     # The last visible panel in each column carries the stage labels.
     for column in range(ncols):
         visible = [axes[row, column] for row in range(nrows) if axes[row, column].get_visible()]
@@ -628,11 +621,11 @@ def sonar_funnel_comparison(funnel: pd.DataFrame) -> plt.Figure:
             visible[-1].set_xticklabels([FUNNEL_SHORT_LABELS[s] for s in FUNNEL_STAGES], rotation=35, ha="right")
             visible[-1].tick_params(axis="x", labelbottom=True)
 
-    fig.suptitle("Sonar pipeline funnel by model  (label = clean-fix rate)", x=0.01, ha="left",
-                 fontweight="bold", color=INK)
+    _suptitle(fig, "Avanzamento nella pipeline Sonar per modello  (etichetta = tasso di correzioni pulite)")
     present = [g for g in GROUPS if g in set(funnel["group"])]
-    handles = [Line2D([], [], color=GROUP_COLORS[g], marker=GROUP_MARKERS[g], markersize=6, label=g) for g in present]
-    handles.append(Line2D([], [], color=BASELINE, linewidth=1, label="other models"))
+    handles = [Line2D([], [], color=GROUP_COLORS[g], marker=GROUP_MARKERS[g], markersize=6, label=_group_label(g))
+               for g in present]
+    handles.append(Line2D([], [], color=BASELINE, linewidth=1, label="altri modelli"))
     _finish_with_legend(fig, handles)
     return fig
 
@@ -666,72 +659,92 @@ def _label_column(ax, fig: plt.Figure, xs, ys, labels, y_top: float) -> None:
                                 "shrinkA": 2, "shrinkB": 5})
 
 
-def efficiency_scatter(summary: pd.DataFrame) -> plt.Figure:
-    """Pass rate against cost: mean latency (top) and mean completion tokens
-    (bottom), per suite. Separate panels, one scale each."""
-    suites = _suites(summary)
-    fig, axes = plt.subplots(2, len(suites), figsize=(7.0 * len(suites), 7.6), squeeze=False)
-    metrics = (("latency_mean", "mean latency per case (s, log scale)"),
-               ("tokens_mean", "mean completion tokens per case (log scale)"))
-    for row, (column, label) in zip(axes, metrics):
-        for ax, suite in zip(row, suites):
-            frame = summary[summary["suite"] == suite]
-            for group, sub in frame.groupby("group"):
-                ax.scatter(sub[column], sub["pass_rate"], s=70, color=GROUP_COLORS.get(group, INK_MUTED),
-                           marker=GROUP_MARKERS.get(group, "o"), edgecolor=SURFACE, linewidth=1.5, zorder=3)
-            ax.set_xscale("log")
-            ax.xaxis.set_major_locator(LogLocator(base=10, subs=(1, 2, 5)))
-            ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _pos: f"{v:g}"))
-            ax.xaxis.set_minor_formatter(NullFormatter())
-            ax.set_ylim(0, 1.08)
-            _percent_axis(ax, x=False)
-            ax.set_xlabel(label)
-            ax.set_ylabel("pass rate")
-            ax.set_title(SUITE_LABELS.get(suite, suite))
-            lo, hi = frame[column].min(), frame[column].max()
-            if lo > 0 and hi > 0:
-                ax.set_xlim(lo / 2, hi * 2)
-            labelled = frame.dropna(subset=[column, "pass_rate"])
-            _label_column(ax, fig, labelled[column].tolist(), labelled["pass_rate"].tolist(),
-                          labelled["model"].tolist(), y_top=1.08)
-    fig.suptitle("Accuracy vs cost", x=0.01, ha="left", fontweight="bold", color=INK)
-    _finish_with_legend(fig, _group_handles(summary))
+def pass_rate_scatter(summary: pd.DataFrame, column: str, xlabel: str, title: str, *,
+                      euro: bool = False, note: str | None = None, frontier: bool = False) -> plt.Figure:
+    """Pass rate (y) against one per-model measure (x, log scale) for a
+    single suite's rows; each point labelled from a column beside the axes.
+    Used for efficiency (cost of one suite repetition) and for latency.
+    `frontier` steps through the Pareto front: the best pass rate available
+    at or below each x, so a model off the line is beaten by a cheaper one."""
+    frame = summary.dropna(subset=[column, "pass_rate"])
+    frame = frame[frame[column] > 0]
+    fig, ax = plt.subplots(figsize=(7.4, 4.6))
+    for group, sub in frame.groupby("group"):
+        ax.scatter(sub[column], sub["pass_rate"], s=70, color=GROUP_COLORS.get(group, INK_MUTED),
+                   marker=GROUP_MARKERS.get(group, "o"), edgecolor=SURFACE, linewidth=1.5, zorder=3)
+    handles = _group_handles(summary)
+    if frontier and not frame.empty:
+        from analysis.statistics import pareto_frontier
+
+        xs, ys = frame[column].tolist(), frame["pass_rate"].tolist()
+        front = pareto_frontier(xs, ys)
+        ax.step([xs[i] for i in front], [ys[i] for i in front], where="post", color=INK_SECONDARY,
+                linewidth=1.2, linestyle=(0, (4, 3)), zorder=2)
+        handles.append(Line2D([], [], color=INK_SECONDARY, linewidth=1.2, linestyle=(0, (4, 3)),
+                              label="frontiera di Pareto"))
+    ax.set_xscale("log")
+    if euro:
+        ax.xaxis.set_major_locator(LogLocator(base=10))
+        ax.xaxis.set_major_formatter(FuncFormatter(_euro_tick))
+    else:
+        ax.xaxis.set_major_locator(LogLocator(base=10, subs=(1, 2, 5)))
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _pos: italian.number(v, "g")))
+    ax.xaxis.set_minor_formatter(NullFormatter())
+    ax.set_ylim(0, 1.08)
+    _percent_axis(ax, x=False)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("tasso di successo")
+    if not frame.empty:
+        lo, hi = frame[column].min(), frame[column].max()
+        ax.set_xlim(lo / 2, hi * 2)
+        _label_column(ax, fig, frame[column].tolist(), frame["pass_rate"].tolist(),
+                      frame["model"].tolist(), y_top=1.08)
+    _suptitle(fig, title)
+    _finish_with_legend(fig, handles, note=_wrap_note(note, fig) if note else None)
     return fig
 
 
-def group_summary_plot(summary: pd.DataFrame, groups: pd.DataFrame) -> plt.Figure:
-    """Commercial vs open source: group mean per metric (bars) with each
-    model's own value overlaid, so a group of one visibly is one model."""
-    suites = _suites(summary)
-    metrics = list(GROUP_METRICS)
-    present = [g for g in GROUPS if g in set(summary["group"])]
-    fig, axes = plt.subplots(1, len(suites), figsize=(5.8 * len(suites), 4.2), squeeze=False, sharey=True)
-    width = min(0.8 / max(len(present), 1), 0.36)
-    for ax, suite in zip(axes[0], suites):
-        x = np.arange(len(metrics))
-        for i, group in enumerate(present):
-            offset = (i - (len(present) - 1) / 2) * width
-            row = groups[(groups["suite"] == suite) & (groups["group"] == group)]
-            values = [row[m].iloc[0] if not row.empty else np.nan for m in metrics]
-            ax.bar(x + offset, values, width=width * 0.92, color=GROUP_COLORS[group], alpha=0.35, linewidth=0)
-            models = summary[(summary["suite"] == suite) & (summary["group"] == group)]
-            for j, metric in enumerate(metrics):
-                ax.scatter(np.full(len(models), x[j] + offset), models[metric], s=36, color=GROUP_COLORS[group],
-                           marker=GROUP_MARKERS[group], edgecolor=SURFACE, linewidth=1.2, zorder=3)
-            for xi, value in zip(x + offset, values):
-                if not np.isnan(value):
-                    ax.text(xi, value + 0.025, _pct(value), ha="center", fontsize=7.5, color=INK_SECONDARY)
-        ax.set_xticks(x)
-        ax.set_xticklabels([GROUP_METRICS[m].replace(" ", "\n", 1) for m in metrics])
-        ax.set_ylim(0, 1.12)
-        _percent_axis(ax, x=False)
-        ax.grid(axis="x", visible=False)
-        ax.set_title(SUITE_LABELS.get(suite, suite))
-    counts = summary.drop_duplicates("model")["group"].value_counts()
-    legend = [Patch(facecolor=GROUP_COLORS[g], alpha=0.6, label=f"{g} (mean of {counts.get(g, 0)} model"
-                    f"{'s' if counts.get(g, 0) != 1 else ''}; markers = individual models)") for g in present]
-    fig.suptitle("Commercial vs open source", x=0.01, ha="left", fontweight="bold", color=INK)
-    _finish_with_legend(fig, legend, ncol=1)
+def pass_rate_vs_size(summary: pd.DataFrame, title: str, note: str | None = None) -> plt.Figure:
+    """Pass rate (y) against reported parameter count (x, log scale) for a
+    single suite's rows. Models whose effective/active count differs say so
+    in their label; models without a published size (the commercial ones)
+    are horizontal reference lines at their pass rate."""
+    sized = summary.dropna(subset=["params_b", "pass_rate"])
+    unsized = summary[summary["params_b"].isna()].dropna(subset=["pass_rate"])
+    fig, ax = plt.subplots(figsize=(7.4, 4.6))
+    for group, sub in sized.groupby("group"):
+        ax.scatter(sub["params_b"], sub["pass_rate"], s=70, color=GROUP_COLORS.get(group, INK_MUTED),
+                   marker=GROUP_MARKERS.get(group, "o"), edgecolor=SURFACE, linewidth=1.5, zorder=3)
+    ax.set_xscale("log")
+    lo, hi = (sized["params_b"].min() / 1.6, sized["params_b"].max() * 1.6) if not sized.empty else (1, 100)
+    ax.set_xlim(lo, hi)
+    ax.xaxis.set_major_locator(LogLocator(base=10, subs=(1, 2, 5)))
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _pos: f"{italian.number(v, 'g')}B"))
+    ax.xaxis.set_minor_formatter(NullFormatter())
+    for _index, row in unsized.iterrows():
+        ax.axhline(row["pass_rate"], color=GROUP_COLORS.get(row["group"], INK_MUTED), linewidth=1.2,
+                   linestyle=(0, (4, 3)), zorder=2)
+    ax.set_ylim(0, 1.08)
+    _percent_axis(ax, x=False)
+    ax.set_xlabel("parametri (totale dichiarato, B = miliardi, scala log.)")
+    ax.set_ylabel("tasso di successo")
+
+    def label(row) -> str:
+        if pd.isna(row["params_b"]):
+            return f"{row['model']} (dimensione non pubblicata)"
+        size_note = row.get("size_note")
+        return f"{row['model']} ({size_note})" if isinstance(size_note, str) and size_note else row["model"]
+
+    rows = pd.concat([sized, unsized])
+    xs = [x if not pd.isna(x) else hi for x in rows["params_b"]]
+    _label_column(ax, fig, xs, rows["pass_rate"].tolist(), [label(r) for _i, r in rows.iterrows()], y_top=1.08)
+    _suptitle(fig, title)
+    handles = _group_handles(sized)
+    for group in [g for g in GROUPS if g in set(unsized["group"])]:
+        handles.append(Line2D([], [], color=GROUP_COLORS[group], linewidth=1.2, linestyle=(0, (4, 3)),
+                              label=f"{_group_label(group)} (dimensione non pubblicata)"))
+    _finish_with_legend(fig, handles, note="\n".join(textwrap.wrap(note, width=int(fig.get_figwidth() * 14)))
+                        if note else None)
     return fig
 
 
@@ -741,10 +754,10 @@ def group_summary_plot(summary: pd.DataFrame, groups: pd.DataFrame) -> plt.Figur
 
 
 def _euro_tick(value: float, _pos=None) -> str:
-    """Plain decimals, no trailing zeros: €0, €0.05, €0.01, €1. Rounded to
-    six significant figures first, so float noise from the tick locator
-    (6.000000000000001e-05) never reaches the label."""
-    return f"€{np.format_float_positional(float(f'{value:.6g}'), trim='-')}"
+    """Plain decimals, no trailing zeros, Italian style: 0 €, 0,05 €, 1 €.
+    Rounded to six significant figures first, so float noise from the tick
+    locator (6.000000000000001e-05) never reaches the label."""
+    return f"{np.format_float_positional(float(f'{value:.6g}'), trim='-').replace('.', ',')} €"
 
 
 def _cost_scale(largest: float) -> int:
@@ -757,16 +770,20 @@ def _cost_scale(largest: float) -> int:
     return 1_000_000
 
 
-def _wrap_note(note: str) -> str:
-    """Cost notes join their parts with ' · '; one part per line."""
-    return "\n".join(note.split("  ·  "))
+def _wrap_note(note: str, fig: plt.Figure) -> str:
+    """Cost notes join their parts with ' · ': one part per line, each
+    wrapped to the figure's width (~14 characters of 7.5 pt text per inch)
+    so a long assumption never widens the saved image. The caption gets the
+    parts as sentences instead."""
+    parts = note.split("  ·  ")
+    _caption_parts(fig)["note"] = " ".join(part[:1].upper() + part[1:].rstrip(".") + "." for part in parts)
+    width = int(fig.get_figwidth() * 14)
+    return "\n".join(line for part in parts for line in textwrap.wrap(part, width=width))
 
 
 def cost_by_case(trials: pd.DataFrame, title: str, note: str) -> plt.Figure | None:
     """Mean cost of one attempt at each case, per suite; the whisker is the
     power-draw band for electricity-costed runs."""
-    from analysis.costs import format_eur
-
     trials = trials.dropna(subset=["cost_eur"])
     if trials.empty:
         return None
@@ -775,8 +792,8 @@ def cost_by_case(trials: pd.DataFrame, title: str, note: str) -> plt.Figure | No
     columns = ["cost_eur", "cost_eur_low", "cost_eur_high"]
     # One scale for every panel, so the suites stay comparable.
     scale = _cost_scale(trials.groupby(["suite", "case_id"])["cost_eur_high"].mean().max())
-    unit = "attempt" if scale == 1 else f"{scale:,} attempts"
-    fig, axes = plt.subplots(1, len(suites), figsize=(5.4 * len(suites), 1.8 + 0.28 * height), squeeze=False)
+    unit = "tentativo" if scale == 1 else f"{italian.number(scale, ',')} tentativi"
+    fig, axes = plt.subplots(1, len(suites), figsize=(5.4 * len(suites), max(3.2, 1.8 + 0.28 * height)), squeeze=False)
     for ax, suite in zip(axes[0], suites):
         frame = trials[trials["suite"] == suite]
         per_rep = frame.groupby("rep")["cost_eur"].sum().mean()
@@ -791,18 +808,18 @@ def cost_by_case(trials: pd.DataFrame, title: str, note: str) -> plt.Figure | No
                         fmt="none", ecolor=INK_MUTED, elinewidth=1, capsize=2)
         tips = per_case["cost_eur_high"].where(banded, per_case["cost_eur"])
         for yi, value, tip in zip(y, per_case["cost_eur"], tips):
-            ax.text(tip * 1.02 + per_case["cost_eur_high"].max() * 0.01, yi, format_eur(value),
+            ax.text(tip * 1.02 + per_case["cost_eur_high"].max() * 0.01, yi, italian.eur(value),
                     va="center", fontsize=7.5, color=INK_SECONDARY)
         ax.set_yticks(y)
         ax.set_yticklabels(per_case.index)
         ax.set_xlim(0, per_case["cost_eur_high"].max() * 1.35)
         ax.xaxis.set_major_locator(MaxNLocator(nbins=4))
         ax.xaxis.set_major_formatter(FuncFormatter(_euro_tick))
-        ax.set_xlabel(f"mean cost per {unit}")
+        ax.set_xlabel(f"costo medio per {unit}")
         ax.grid(axis="y", visible=False)
-        ax.set_title(f"{SUITE_LABELS.get(suite, suite)}  ·  {format_eur(per_rep)} per repetition")
-    fig.suptitle(title, x=0.01, ha="left", fontweight="bold", color=INK)
-    _finish_with_legend(fig, [], note=_wrap_note(note))
+        ax.set_title(f"{SUITE_LABELS.get(suite, suite)}  ·  {italian.eur(per_rep)} per ripetizione")
+    _suptitle(fig, title)
+    _finish_with_legend(fig, [], note=_wrap_note(note, fig))
     return fig
 
 
@@ -810,12 +827,10 @@ def cost_comparison(costs: pd.DataFrame, note: str) -> plt.Figure:
     """What one repetition of each suite costs per model, and what one
     passing trial costs, on a log scale (API and electricity costs sit
     orders of magnitude apart). Whiskers = the local power-draw band."""
-    from analysis.costs import format_eur
-
     suites = _suites(costs)
     order = model_order(costs)
-    basis_labels = {"api": "API fees", "gpu-hours": "rented GPU time", "electricity-measured": "own GPU, measured",
-                    "electricity": "own GPU, assumed", "unpriced": "unpriced"}
+    basis_labels = {"api": "tariffe API", "gpu-hours": "GPU a noleggio", "electricity-measured": "GPU propria, misurato",
+                    "electricity": "GPU propria, stimato", "unpriced": "prezzo non disponibile"}
     labels = {
         model: f"{text}\n" + " + ".join(basis_labels.get(b, b) for b in basis.split("/"))
         for model, text, basis in (
@@ -823,48 +838,58 @@ def cost_comparison(costs: pd.DataFrame, note: str) -> plt.Figure:
             for model, text in model_labels(costs).items()
         )
     }
-    metrics = (("cost_per_rep_eur", "cost of one full suite repetition"),
-               ("cost_per_pass_eur", "cost per passing trial"))
-    fig, axes = plt.subplots(len(metrics), len(suites), figsize=(5.6 * len(suites), (1.5 + 0.6 * len(order)) * 2),
-                             squeeze=False, sharey=True)
+    metrics = (("cost_per_rep_eur", "costo di una ripetizione completa della suite"),
+               ("cost_per_pass_eur", "costo per prova superata"))
+    # One suite: the two metrics side by side, sharing the model labels.
+    # Several suites: one row per metric, one column per suite.
+    if len(suites) == 1:
+        fig, grid = plt.subplots(1, len(metrics), figsize=(5.4 * len(metrics), 1.5 + 0.6 * len(order)),
+                                 squeeze=False, sharey=True)
+        panels = [(grid[0][i], column, label, suites[0]) for i, (column, label) in enumerate(metrics)]
+    else:
+        fig, grid = plt.subplots(len(metrics), len(suites), figsize=(5.6 * len(suites), (1.5 + 0.6 * len(order)) * 2),
+                                 squeeze=False, sharey=True)
+        panels = [(grid[r][c], column, label, suite)
+                  for r, (column, label) in enumerate(metrics) for c, suite in enumerate(suites)]
     positive = costs[[m + s for m, _l in metrics for s in ("_low", "_high", "")]].to_numpy().ravel()
     positive = positive[np.isfinite(positive) & (positive > 0)]
     lo, hi = (positive.min() / 4, positive.max() * 12) if positive.size else (1e-4, 1)
 
-    for row, (column, label) in zip(axes, metrics):
-        for ax, suite in zip(row, suites):
-            frame = costs[costs["suite"] == suite].set_index("model").reindex(order)
-            y = np.arange(len(order))[::-1]
-            for yi, (model, r) in zip(y, frame.iterrows()):
-                color = GROUP_COLORS.get(r["group"], INK_MUTED)
-                value, low, high = r[column], r[column + "_low"], r[column + "_high"]
-                if not np.isfinite(value):
-                    text = "no passing trials" if column == "cost_per_pass_eur" else "no price"
-                    ax.text(lo * 1.2, yi, text, va="center", fontsize=8, color=INK_MUTED)
-                    continue
-                if high > low:
-                    ax.plot([low, high], [yi, yi], color=color, linewidth=2.5, alpha=0.45, solid_capstyle="round")
-                ax.scatter([value], [yi], s=70, color=color, marker=GROUP_MARKERS.get(r["group"], "o"),
-                           edgecolor=SURFACE, linewidth=1.5, zorder=3)
-                ax.annotate(format_eur(value), (max(value, high if high > low else value), yi), xytext=(7, 0),
-                            textcoords="offset points", va="center", fontsize=8, color=INK_SECONDARY)
-            ax.set_xscale("log")
-            ax.set_xlim(lo, hi)
-            # A label every second decade keeps six decades legible; the
-            # decades in between still get a gridline.
-            ax.xaxis.set_major_locator(LogLocator(base=100))
-            ax.xaxis.set_minor_locator(LogLocator(base=10))
-            ax.xaxis.set_major_formatter(FuncFormatter(_euro_tick))
-            ax.xaxis.set_minor_formatter(NullFormatter())
-            ax.grid(axis="x", which="minor", color=GRID, linewidth=0.8)
-            ax.set_yticks(y)
-            ax.set_yticklabels([labels[m] for m in order])
-            ax.set_ylim(-0.6, len(order) - 0.4)
-            ax.set_xlabel(f"{label} (log scale)")
-            ax.grid(axis="y", visible=False)
-            ax.set_title(SUITE_LABELS.get(suite, suite))
-    fig.suptitle("What a run costs  (label: how each model is priced)", x=0.01, ha="left", fontweight="bold", color=INK)
-    _finish_with_legend(fig, _group_handles(costs), note=_wrap_note(note))
+    for ax, column, label, suite in panels:
+        frame = costs[costs["suite"] == suite].set_index("model").reindex(order)
+        y = np.arange(len(order))[::-1]
+        for yi, (model, r) in zip(y, frame.iterrows()):
+            color = GROUP_COLORS.get(r["group"], INK_MUTED)
+            value, low, high = r[column], r[column + "_low"], r[column + "_high"]
+            if not np.isfinite(value):
+                text = "nessuna prova superata" if column == "cost_per_pass_eur" else "prezzo non disponibile"
+                ax.text(lo * 1.2, yi, text, va="center", fontsize=8, color=INK_MUTED)
+                continue
+            if high > low:
+                ax.plot([low, high], [yi, yi], color=color, linewidth=2.5, alpha=0.45, solid_capstyle="round")
+            ax.scatter([value], [yi], s=70, color=color, marker=GROUP_MARKERS.get(r["group"], "o"),
+                       edgecolor=SURFACE, linewidth=1.5, zorder=3)
+            ax.annotate(italian.eur(value), (max(value, high if high > low else value), yi), xytext=(7, 0),
+                        textcoords="offset points", va="center", fontsize=8, color=INK_SECONDARY)
+        ax.set_xscale("log")
+        ax.set_xlim(lo, hi)
+        # A label every second decade keeps six decades legible; the
+        # decades in between still get a gridline.
+        ax.xaxis.set_major_locator(LogLocator(base=100))
+        ax.xaxis.set_minor_locator(LogLocator(base=10))
+        ax.xaxis.set_major_formatter(FuncFormatter(_euro_tick))
+        ax.xaxis.set_minor_formatter(NullFormatter())
+        ax.grid(axis="x", which="minor", color=GRID, linewidth=0.8)
+        ax.set_yticks(y)
+        ax.set_yticklabels([labels[m] for m in order])
+        ax.set_ylim(-0.6, len(order) - 0.4)
+        ax.set_xlabel(f"{label} (scala log.)")
+        ax.grid(axis="y", visible=False)
+        ax.set_title(SUITE_LABELS.get(suite, suite) if len(suites) > 1 else label.capitalize())
+    heading = (f"{SUITE_LABELS.get(suites[0], suites[0])}: quanto costa un'esecuzione" if len(suites) == 1
+               else "Quanto costa un'esecuzione")
+    _suptitle(fig, f"{heading}  (etichetta: come è calcolato il costo)")
+    _finish_with_legend(fig, _group_handles(costs), note=_wrap_note(note, fig))
     return fig
 
 
@@ -873,32 +898,55 @@ def cost_comparison(costs: pd.DataFrame, note: str) -> plt.Figure:
 # --------------------------------------------------------------------------- #
 
 
-def radar_note(weights: dict[str, float] | None = None) -> str:
+def radar_note(suite: str, weights: dict[str, float] | None = None, *, scorecard: bool = False) -> str:
+    """What the radar and scorecard axes measure, their scales and how the
+    task score is formed - the same text for both, so they read as a pair."""
     from analysis.statistics import RADAR_LOG_SCALES
 
     (fast, slow), (cheap, dear) = RADAR_LOG_SCALES["speed"], RADAR_LOG_SCALES["low_cost"]
     if weights is None or len(set(weights.values())) == 1:
-        overall = "Overall = unweighted mean of the five."
+        score = "Punteggio = media semplice dei quattro assi."
     else:
-        overall = "Overall = weighted mean (" + ", ".join(
-            f"{RADAR_AXES[a].replace(chr(10), ' ')} {w:g}" for a, w in weights.items()) + ")."
+        score = "Punteggio = media pesata (" + ", ".join(
+            f"{RADAR_AXES[a]} {italian.number(w, 'g')}" for a, w in weights.items()) + ")."
+    accuracy = {
+        "markdown": "Accuratezza: quota di tutte le prove il cui JSON corrisponde esattamente al riferimento.",
+        "sonar": "Accuratezza: quota di tutte le prove concluse con una correzione pulita (compilata, test "
+                 "superati, problema risolto, nessun nuovo problema).",
+    }.get(suite, "Accuratezza: quota di tutte le prove superate.")
+    lead = ("Ogni cella: il valore misurato e, tra parentesi, il suo punteggio 0-1 (quello del grafico radar); "
+            "colore = punteggio." if scorecard else "Più esterno = migliore.")
     return (
-        "Outer = better. Markdown accuracy and sonar clean fixes: share of all trials passed.  "
-        "Consistency: share of repetitions giving a case's most common output, averaged over both suites.  "
-        f"Speed: mean latency per case on a log scale, {fast:g} s at the rim to {slow:g} s at the centre.  "
-        f"Low cost: one repetition of both suites on a log scale, \u20ac{cheap:g} at the rim to "
-        f"\u20ac{dear:g} at the centre.  {overall}  "
-        "Costs mix API fees, rented GPU time and own-GPU electricity (see the cost figure); "
-        "latency mixes API, H200 and laptop hardware."
+        f"{lead}  {accuracy}  "
+        "Coerenza: quota di ripetizioni che danno l'output più frequente di un caso, in media sui casi.  "
+        f"Velocità: latenza media per caso su scala logaritmica, da {italian.number(fast, 'g')} s (punteggio 1) "
+        f"a {italian.number(slow, 'g')} s (punteggio 0).  "
+        f"Economicità: costo di una ripetizione della suite su scala logaritmica, da {italian.number(cheap, 'g')} € "
+        f"(punteggio 1) a {italian.number(dear, 'g')} € (punteggio 0).  {score}  "
+        "I costi mescolano tariffe API, GPU a noleggio ed elettricità della GPU propria (vedi la figura dei "
+        "costi); la latenza mescola API, H200 e hardware del portatile."
     )
 
 
-def radar_comparison(scores: pd.DataFrame, weights: dict[str, float] | None = None) -> plt.Figure:
-    """One radar per model - quality, consistency, speed and cost on axes
-    where outer is always better - ranked by overall score, each drawn over
-    every other model's outline in grey so a panel reads on its own and
-    against the field. `scores` comes from statistics.radar_scores."""
+def _axis_labels(suite: str) -> dict[str, str]:
+    return {**RADAR_AXES, "accuracy": RADAR_ACCURACY_LABELS.get(suite, RADAR_AXES["accuracy"])}
+
+
+def _wrapped(text: str, fig: plt.Figure) -> str:
+    # ~14 characters of 7.5 pt text per inch of figure width.
+    return "\n".join(textwrap.wrap(text, width=int(fig.get_figwidth() * 14)))
+
+
+def radar_comparison(scores: pd.DataFrame, weights: dict[str, float] | None = None,
+                     extra_note: str | None = None) -> plt.Figure:
+    """One radar per model for a single suite - accuracy, consistency, speed
+    and cost on axes where outer is always better - in the usual model order,
+    each drawn over every other model's outline in grey so a panel reads on
+    its own and against the field. `scores` is one suite's rows of
+    statistics.radar_scores."""
+    suite = scores["suite"].iloc[0]
     axes_keys = list(RADAR_AXES)
+    axis_labels = _axis_labels(suite)
     angles = np.linspace(0, 2 * np.pi, len(axes_keys), endpoint=False)
     closed = np.append(angles, angles[0])
 
@@ -906,13 +954,14 @@ def radar_comparison(scores: pd.DataFrame, weights: dict[str, float] | None = No
         values = row[axes_keys].astype(float).fillna(0).to_numpy()
         return np.append(values, values[0])
 
-    count = len(scores)
+    rows = scores.set_index("model").reindex(model_order(scores)).reset_index()
+    count = len(rows)
     ncols = 3 if count <= 9 else 4
     nrows = math.ceil(count / ncols)
-    fig, axes = plt.subplots(nrows, ncols, figsize=(3.8 * ncols, 4.2 * nrows + 1.2),
+    fig, axes = plt.subplots(nrows, ncols, figsize=(3.8 * ncols, 4.0 * nrows + 1.2),
                              subplot_kw={"projection": "polar"}, squeeze=False)
-    for rank, (ax, (_index, row)) in enumerate(zip(axes.flat, scores.iterrows()), start=1):
-        for _other_index, other in scores.iterrows():
+    for ax, (_index, row) in zip(axes.flat, rows.iterrows()):
+        for _other_index, other in rows.iterrows():
             if other["model"] != row["model"]:
                 ax.plot(closed, outline(other), color=BASELINE, linewidth=0.8, alpha=0.8, zorder=1)
         color = GROUP_COLORS.get(row["group"], INK_MUTED)
@@ -925,28 +974,91 @@ def radar_comparison(scores: pd.DataFrame, weights: dict[str, float] | None = No
         ax.set_yticks([0.25, 0.5, 0.75, 1.0])
         ax.set_yticklabels([])
         ax.set_xticks(angles)
-        ax.set_xticklabels([RADAR_AXES[k] for k in axes_keys], fontsize=7.5, color=INK_SECONDARY)
-        ax.tick_params(axis="x", pad=1)
+        ax.set_xticklabels([axis_labels[k] for k in axes_keys], fontsize=7.5, color=INK_SECONDARY)
+        ax.tick_params(axis="x", pad=3)
+        # Polar labels are centred on their angle, so a label at the side
+        # would straddle the rim: anchor side labels at their inner edge.
+        for text, angle in zip(ax.get_xticklabels(), angles):
+            side = np.sin(angle)
+            text.set_horizontalalignment("left" if side > 0.1 else "right" if side < -0.1 else "center")
         ax.grid(color=GRID, linewidth=0.8)
         ax.spines["polar"].set_color(GRID)
         ax.set_theta_offset(np.pi / 2)  # first axis at the top
         ax.set_theta_direction(-1)
-        overall = "n/a" if pd.isna(row["overall"]) else f"{row['overall']:.2f}"
-        ax.set_title(f"#{rank}  {row['model']}\n{row['group'].lower()} · overall {overall}",
-                     fontsize=9, loc="center", pad=22)
+        score = "n.d." if pd.isna(row["score"]) else italian.number(row["score"], ".2f")
+        ax.set_title(f"{row['model']}\n{_group_label(row['group'], lower=True)} · punteggio {score}", fontsize=9,
+                     loc="center", pad=22)
     for ax in axes.flat[count:]:
         ax.set_visible(False)
 
-    fig.suptitle("Which model to pick: quality, consistency, speed and cost  (ranked by overall score)",
-                 x=0.01, ha="left", fontweight="bold", color=INK)
-    present = [g for g in GROUPS if g in set(scores["group"])]
-    handles = [Patch(facecolor=GROUP_COLORS[g], alpha=0.6, label=g) for g in present]
-    handles.append(Line2D([], [], color=BASELINE, linewidth=1, label="other models"))
-    # ~14 characters of 7.5 pt text per inch of figure width.
-    note = "\n".join(textwrap.wrap(radar_note(weights), width=int(fig.get_figwidth() * 14)))
+    _suptitle(fig, f"{SUITE_LABELS.get(suite, suite)}: accuratezza, coerenza, velocità e costo")
+    present = [g for g in GROUPS if g in set(rows["group"])]
+    handles = [Patch(facecolor=GROUP_COLORS[g], alpha=0.6, label=_group_label(g)) for g in present]
+    handles.append(Line2D([], [], color=BASELINE, linewidth=1, label="altri modelli"))
+    text = radar_note(suite, weights) + (f"  {extra_note}" if extra_note else "")
     # Polar tick labels sit outside the axes box tight_layout measures, so
     # rows need extra room to keep them clear of the next row's titles.
-    _finish_with_legend(fig, handles, note=note, h_pad=4.5)
+    _finish_with_legend(fig, handles, note=_wrapped(text, fig), h_pad=4.5)
     # The suptitle needs its own band above the first row's (padded) titles.
-    fig.subplots_adjust(top=fig.subplotpars.top - 0.45 / fig.get_figheight())
+    if not _CAPTIONS:
+        fig.subplots_adjust(top=fig.subplotpars.top - 0.45 / fig.get_figheight())
+    return fig
+
+
+def scorecard(scores: pd.DataFrame, weights: dict[str, float] | None = None,
+              extra_note: str | None = None) -> plt.Figure:
+    """The radar's numbers as a table for a single suite: models x axes plus
+    the task score, each cell the measured value with its 0-1 score, shaded
+    by the score. Easier to read exact values from than a radar."""
+    suite = scores["suite"].iloc[0]
+    order = model_order(scores)
+    labels = model_labels(scores)
+    frame = scores.set_index("model").reindex(order)
+    columns = [*RADAR_AXES, "score"]
+    # Wrapped to the column width: the Italian accuracy label is long.
+    headers = {key: "\n".join(wrapped for line in label.split("\n")
+                              for wrapped in textwrap.wrap(line, 13, break_long_words=False))
+               for key, label in {**_axis_labels(suite), "score": "punteggio"}.items()}
+    values = frame[columns].astype(float)
+    values.index = [labels[m] for m in order]
+
+    def measured(model: str, column: str) -> str:
+        row = frame.loc[model]
+        raw = {"accuracy": row["accuracy"], "consistency": row["consistency"],
+               "speed": row["latency_s"], "low_cost": row["cost_per_rep_eur"]}.get(column)
+        if raw is None or pd.isna(raw):
+            return "" if column == "score" else ("prezzo n.d." if column == "low_cost" else "n.d.")
+        if column in ("accuracy", "consistency"):
+            return _pct(raw)
+        return f"{italian.number(raw, '.1f')} s" if column == "speed" else italian.eur(raw)
+
+    # The footnote needs ~1.3 in whatever the number of rows.
+    fig, ax = plt.subplots(figsize=(7.4, max(3.6, 1.6 + 0.55 * len(order))))
+    sns.heatmap(values, ax=ax, cmap=SEQUENTIAL, vmin=0, vmax=1, linewidths=1.2, linecolor=SURFACE,
+                cbar_kws={"label": "punteggio (1 = migliore)", "shrink": 0.8, "pad": 0.03,
+                          "format": FuncFormatter(lambda v, _pos: italian.number(v, ".1f"))})
+    for i, model in enumerate(order):
+        for j, column in enumerate(columns):
+            score = values.iat[i, j]
+            ink = INK_MUTED if pd.isna(score) else _ink_for(SEQUENTIAL(score))
+            text = measured(model, column)
+            if column == "score":
+                ax.text(j + 0.5, i + 0.5, "n.d." if pd.isna(score) else italian.number(score, ".2f"),
+                        ha="center", va="center",
+                        fontsize=9, fontweight="bold", color=ink)
+                continue
+            ax.text(j + 0.5, i + 0.4, text, ha="center", va="center", fontsize=8.5, color=ink)
+            if not pd.isna(score):
+                ax.text(j + 0.5, i + 0.72, f"({italian.number(score, '.2f')})", ha="center", va="center",
+                        fontsize=7, color=ink)
+    ax.xaxis.tick_top()
+    ax.set_xticklabels([headers[c] for c in columns], rotation=0, fontsize=8.5)
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax.tick_params(axis="both", length=0)
+    ax.tick_params(axis="y", labelrotation=0)
+    ax.grid(False)
+    _suptitle(fig, f"{SUITE_LABELS.get(suite, suite)}: scheda di valutazione")
+    text = radar_note(suite, weights, scorecard=True) + (f"  {extra_note}" if extra_note else "")
+    _finish_with_legend(fig, [], note=_wrapped(text, fig))
     return fig

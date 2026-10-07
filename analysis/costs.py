@@ -89,15 +89,38 @@ class GpuHourPrice:
     high: float
 
 
-# On-demand market rates, USD per GPU-hour, 2026-09-28 (getdeploying.com):
-# H200 NVL 1x at RunPod $3.79 (central), 2x at Vast.ai $3.52 (cheapest NVL
-# listing), and $4.50, the median H200 rate across 35 providers. Keys are
-# GPU names exactly as nvidia-smi reports them. A cluster with its own
-# internal rate should use that instead: --gpu-hour-price "NAME=EUR".
+# On-demand market rates, USD per GPU-hour, as (central, low, high), from
+# getdeploying.com. Keys are GPU names exactly as nvidia-smi reports them. A
+# cluster with its own internal rate should use that instead:
+# --gpu-hour-price "NAME=EUR".
+#   H200 NVL (2026-09-28): 1x at RunPod $3.79; 2x at Vast.ai $3.52, the
+#     cheapest NVL listing; $4.50, the median H200 rate across 35 providers.
+#   A100 80GB SXM (2026-10-07): 1x at RunPod $1.00; $0.37, the cheapest
+#     in-stock listing (Vast.ai); $1.81, the median across providers.
 GPU_HOUR_PRICES_USD = {
     "NVIDIA H200 NVL": (3.79, 3.52, 4.50),
+    "NVIDIA A100 80GB SXM": (1.00, 0.37, 1.81),
 }
-GPU_HOUR_SOURCE = "https://getdeploying.com/gpus/nvidia-h200"
+GPU_HOUR_PRICE_DATES = {
+    "NVIDIA H200 NVL": "2026-09-28",
+    "NVIDIA A100 80GB SXM": "2026-10-07",
+}
+GPU_HOUR_SOURCES = {
+    "NVIDIA H200 NVL": "https://getdeploying.com/gpus/nvidia-h200",
+    "NVIDIA A100 80GB SXM": "https://getdeploying.com/gpus/nvidia-a100",
+}
+
+# Memory bandwidth, GB/s, from NVIDIA's data sheets. Used by --price-as-gpu
+# to estimate how long a run measured on one GPU would take on another,
+# assuming single-stream decoding is memory-bandwidth bound.
+GPU_MEMORY_BANDWIDTH_GBPS = {
+    "NVIDIA H200 NVL": 4800,
+    "NVIDIA A100 80GB SXM": 2039,
+}
+
+
+def _lookup(table: dict, name: str):
+    return {key.lower(): value for key, value in table.items()}.get(name.lower())
 
 # Wall-power draw while a local model generates. The local runs were made on
 # a laptop with an RTX 4050 Laptop GPU (60 W default power limit) and a
@@ -125,13 +148,31 @@ class CostAssumptions:
     # GPU name as nvidia-smi reports it -> EUR per GPU-hour (matched ignoring case).
     gpu_hour_prices: dict[str, GpuHourPrice] = field(default_factory=lambda: default_gpu_hour_prices(USD_PER_EUR))
     gpu_hour_overridden: tuple[str, ...] = ()
+    # Measured GPU -> GPU to price its runs as (--price-as-gpu); the time is
+    # scaled by the ratio of their memory bandwidths (see time_scale).
+    price_as_gpu: dict[str, str] = field(default_factory=dict)
+
+    def priced_as(self, gpu: str) -> str:
+        """The GPU whose hourly rate prices runs measured on `gpu`."""
+        return _lookup(self.price_as_gpu, gpu) or gpu
+
+    def time_scale(self, gpus: list[str]) -> float:
+        """How many times longer inference would take on the GPUs these are
+        priced as: the measured GPU's memory bandwidth over the pricing
+        GPU's (1 when a GPU is priced as itself)."""
+        factors = [1.0]
+        for gpu in gpus:
+            target = self.priced_as(gpu)
+            if target.lower() != gpu.lower():
+                factors.append(_lookup(GPU_MEMORY_BANDWIDTH_GBPS, gpu) / _lookup(GPU_MEMORY_BANDWIDTH_GBPS, target))
+        return max(factors)
 
     def gpu_hour_price(self, gpus: list[str]) -> GpuHourPrice | None:
-        """The summed hourly rate of these GPUs, or None unless every one
-        of them has a price (a run on any other machine is costed by its
-        electricity instead)."""
+        """The summed hourly rate of these GPUs (or of the GPUs they're
+        priced as), or None unless every one has a price (a run on any other
+        machine is costed by its electricity instead)."""
         by_name = {name.lower(): price for name, price in self.gpu_hour_prices.items()}
-        prices = [by_name.get(name.lower()) for name in gpus]
+        prices = [by_name.get(self.priced_as(name).lower()) for name in gpus]
         if not prices or any(p is None for p in prices):
             return None
         return GpuHourPrice(*(sum(getattr(p, f) for p in prices) for f in ("eur", "low", "high")))
@@ -150,35 +191,56 @@ class CostAssumptions:
     def kwh(seconds: float, watts: float) -> float:
         return seconds / 3600 * watts / 1000
 
-    def note(self, bases: set[str]) -> str:
-        """One line stating the assumptions behind a cost figure."""
+    def note(self, bases: set[str], gpus: set[str] | None = None) -> str:
+        """One line stating the assumptions behind a cost figure, in Italian
+        like the rest of the figure text. `gpus` (the measured GPUs of the
+        GPU-hour-priced runs shown) limits the rented-GPU part to those GPUs."""
+        from analysis.italian import date, number
+
         parts = []
         if API in bases:
-            parts.append(f"API: OpenAI standard list prices as of {self.prices_as_of}, uncached input, "
-                         f"1 € = {self.usd_per_eur} $ (ECB)")
+            parts.append(f"API: prezzi di listino standard OpenAI al {date(self.prices_as_of)}, input non in cache, "
+                         f"1 € = {number(self.usd_per_eur, 'g')} $ (BCE)")
         if GPU_HOURS in bases:
-            rates = ", ".join(
-                f"{name} €{p.eur:.2f}/GPU-h" + ("" if p.low == p.high else f" (band €{p.low:.2f}-{p.high:.2f})")
-                for name, p in self.gpu_hour_prices.items())
-            source = ("site rate" if self.gpu_hour_overridden
-                      else f"on-demand market rate as of {self.prices_as_of}")
-            parts.append(f"rented GPU: inference time × GPUs × {rates}, {source}")
+            measured = sorted(gpus) if gpus else [n for n in self.gpu_hour_prices if n not in self.price_as_gpu.values()]
+            for gpu in measured:
+                target = self.priced_as(gpu)
+                price = _lookup(self.gpu_hour_prices, target)
+                if price is None:
+                    continue
+                rate = f"{number(price.eur, '.2f')} €/GPU-h" + (
+                    "" if price.low == price.high
+                    else f" (intervallo {number(price.low, '.2f')}-{number(price.high, '.2f')} €)")
+                source = ("tariffa della struttura" if target in self.gpu_hour_overridden
+                          else "tariffa di mercato on-demand al "
+                               + date(GPU_HOUR_PRICE_DATES.get(target, self.prices_as_of)))
+                if target.lower() == gpu.lower():
+                    parts.append(f"GPU a noleggio: tempo di inferenza × GPU × {target} {rate}, {source}")
+                else:
+                    scale = self.time_scale([gpu])
+                    parts.append(
+                        f"GPU a noleggio (stima): tempo di inferenza misurato su {gpu} × {number(scale, '.2f')} "
+                        f"(banda di memoria {number(_lookup(GPU_MEMORY_BANDWIDTH_GBPS, gpu), ',')} → "
+                        f"{number(_lookup(GPU_MEMORY_BANDWIDTH_GBPS, target), ',')} GB/s) × GPU × {target} {rate}, "
+                        f"{source}")
         if ELECTRICITY_MEASURED in bases:
-            parts.append(f"local (measured): recorded GPU board + CPU package energy × "
-                         f"€{self.eur_per_kwh:.4f}/kWh (ARERA, Q3 2026) - excludes RAM, display, PSU losses")
+            parts.append(f"locale (misurato): energia registrata di scheda GPU e package CPU × "
+                         f"{number(self.eur_per_kwh, '.4f')} €/kWh (ARERA, T3 2026) - esclusi RAM, schermo e "
+                         f"perdite dell'alimentatore")
         if ELECTRICITY in bases:
-            parts.append(f"local (assumed): inference time × {self.local_watts:g} W "
-                         f"(band {self.local_watts_low:g}-{self.local_watts_high:g} W) × "
-                         f"€{self.eur_per_kwh:.4f}/kWh (ARERA, Q3 2026)")
+            parts.append(f"locale (stimato): tempo di inferenza × {number(self.local_watts, 'g')} W "
+                         f"(intervallo {number(self.local_watts_low, 'g')}-{number(self.local_watts_high, 'g')} W) × "
+                         f"{number(self.eur_per_kwh, '.4f')} €/kWh (ARERA, T3 2026)")
         return "  ·  ".join(parts)
 
     def as_dict(self) -> dict:
         return {
             **asdict(self),
             "openai_prices_usd_per_1m": {m: asdict(p) for m, p in OPENAI_PRICES_USD_PER_1M.items()},
+            "gpu_memory_bandwidth_gbps": GPU_MEMORY_BANDWIDTH_GBPS,
             "sources": {
                 "openai": OPENAI_PRICING_SOURCE,
-                "gpu_hour": GPU_HOUR_SOURCE,
+                "gpu_hour": GPU_HOUR_SOURCES,
                 "usd_per_eur": USD_PER_EUR_SOURCE,
                 "electricity": ELECTRICITY_SOURCE,
             },
@@ -206,6 +268,24 @@ def parse_gpu_hour_prices(values: list[str] | None) -> dict[str, GpuHourPrice]:
     return prices
 
 
+def parse_price_as_gpu(values: list[str] | None) -> dict[str, str]:
+    """`--price-as-gpu "MEASURED=TARGET"` arguments -> {measured: target};
+    both need a known memory bandwidth, the target a GPU-hour price."""
+    mapping = {}
+    for value in values or []:
+        measured, _, target = (part.strip() for part in value.partition("="))
+        if not measured or not target:
+            raise ValueError(f"Bad --price-as-gpu '{value}': expected \"MEASURED GPU=PRICING GPU\"")
+        unknown = [g for g in (measured, target) if _lookup(GPU_MEMORY_BANDWIDTH_GBPS, g) is None]
+        if unknown:
+            raise ValueError(f"--price-as-gpu: no memory bandwidth known for {', '.join(unknown)} "
+                             f"(known: {', '.join(GPU_MEMORY_BANDWIDTH_GBPS)})")
+        if _lookup(GPU_HOUR_PRICES_USD, target) is None:
+            raise ValueError(f"--price-as-gpu: no GPU-hour price for {target} (known: {', '.join(GPU_HOUR_PRICES_USD)})")
+        mapping[measured] = target
+    return mapping
+
+
 def add_cost_arguments(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group("cost assumptions")
     group.add_argument("--local-watts", type=float, default=LOCAL_WATTS,
@@ -220,12 +300,17 @@ def add_cost_arguments(parser: argparse.ArgumentParser) -> None:
     group.add_argument("--gpu-hour-price", action="append", metavar="\"GPU NAME=EUR\"",
                        help="Price a GPU (named as nvidia-smi reports it) by the GPU-hour, e.g. a "
                             "cluster's internal rate; replaces the market rate for that GPU. Repeatable.")
+    group.add_argument("--price-as-gpu", action="append", metavar="\"MEASURED=TARGET\"",
+                       help="Price runs measured on one GPU as if they had run on another: the time is scaled "
+                            "by the ratio of memory bandwidths and charged at the other GPU's rate, e.g. "
+                            "\"NVIDIA H200 NVL=NVIDIA A100 80GB SXM\". Repeatable.")
 
 
 def assumptions_from_args(args: argparse.Namespace) -> CostAssumptions:
     low, high = sorted(args.local_watts_range)
     try:
         overrides = parse_gpu_hour_prices(getattr(args, "gpu_hour_price", None))
+        price_as_gpu = parse_price_as_gpu(getattr(args, "price_as_gpu", None))
     except ValueError as e:
         raise SystemExit(str(e))
     return CostAssumptions(
@@ -236,6 +321,7 @@ def assumptions_from_args(args: argparse.Namespace) -> CostAssumptions:
             **overrides,
         },
         gpu_hour_overridden=tuple(overrides),
+        price_as_gpu=price_as_gpu,
         usd_per_eur=args.usd_per_eur,
         eur_per_kwh=args.kwh_price,
         local_watts=args.local_watts,
@@ -272,6 +358,7 @@ def trial_costs(ref: RunRef, assumptions: CostAssumptions,
     hardware = ref.settings.get("hardware") or {}
     gpus = hardware.get("gpus") or []
     gpu_rate = assumptions.gpu_hour_price(gpus)
+    time_scale = assumptions.time_scale(gpus) if gpu_rate is not None else 1.0
     # A SLURM job on a GPU with no GPU-hour price isn't "my own machine":
     # household electricity would be the wrong price for it, so leave it
     # unpriced (compare_models warns) until --gpu-hour-price covers it.
@@ -283,7 +370,7 @@ def trial_costs(ref: RunRef, assumptions: CostAssumptions,
             cost = assumptions.api_eur(api_model[i], prompt[i], completion[i])
             rows.append((API, cost, cost, cost, math.nan))
         elif provider[i] == "llama.cpp" and gpu_rate is not None:
-            hours = seconds[i] / 3600
+            hours = seconds[i] / 3600 * time_scale
             kwh = energy_wh[i] / 1000 if pd.notna(energy_wh[i]) else math.nan
             rows.append((GPU_HOURS, hours * gpu_rate.eur, hours * gpu_rate.low, hours * gpu_rate.high, kwh))
         elif provider[i] == "llama.cpp" and on_cluster:
@@ -310,7 +397,13 @@ def trial_costs(ref: RunRef, assumptions: CostAssumptions,
     # whatever it's priced by.
     gpu_count = len(gpus) if gpus else math.nan
     trials = trials.assign(provider=provider, api_model=api_model, gpus=gpu_count).join(costed)
-    trials["gpu_hours"] = (seconds / 3600 * gpu_count).where(provider == "llama.cpp")
+    # GPU-hours on the GPU the run is priced as: scaled when --price-as-gpu
+    # substitutes a slower one.
+    trials["gpu_hours"] = (seconds / 3600 * gpu_count * time_scale).where(provider == "llama.cpp")
+    priced = bool(gpus) and gpu_rate is not None
+    trials["measured_gpu"] = gpus[0] if priced else None
+    trials["priced_gpu"] = assumptions.priced_as(gpus[0]) if priced else None
+    trials["time_scale"] = time_scale
     return trials
 
 
@@ -338,6 +431,9 @@ def cost_summary(trials: pd.DataFrame, summary: pd.DataFrame | None = None) -> p
             # all - the rest is loading, compiling, testing and SonarQube,
             # which a cluster bills too but no model is responsible for.
             "gpu_hours": frame["gpu_hours"].sum(min_count=1) if "gpu_hours" in frame else math.nan,
+            "measured_gpu": frame["measured_gpu"].dropna().iloc[0] if frame["measured_gpu"].notna().any() else None,
+            "priced_gpu": frame["priced_gpu"].dropna().iloc[0] if frame["priced_gpu"].notna().any() else None,
+            "time_scale": frame["time_scale"].iloc[0],
             "allocated_gpu_hours": _allocated_gpu_hours(frame),
             "total_cost_eur": total["cost_eur"],
             "cost_per_rep_eur": total["cost_eur"] / repetitions,

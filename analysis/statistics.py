@@ -84,33 +84,31 @@ def funnel_rates(stages: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["model", "group", "stage", "reached", "trials", "rate"])
 
 
-GROUP_METRICS = {
-    "pass_rate": "Pass rate",
-    "share_stable_output": "Same output every rep",
-    "share_flaky": "Flaky cases",
-    "mean_agreement_rate": "Mean agreement",
-}
+def pareto_frontier(costs, rates) -> list[int]:
+    """Indices of the points no cheaper (or equally cheap) point beats on
+    pass rate, cheapest first: the best pass rate each budget can buy."""
+    best = -math.inf
+    frontier = []
+    for i in sorted(range(len(costs)), key=lambda i: (costs[i], -rates[i])):
+        if rates[i] > best:
+            frontier.append(i)
+            best = rates[i]
+    return frontier
 
 
-def group_summary(summary: pd.DataFrame) -> pd.DataFrame:
-    """Per (group, suite): the mean of each model's metrics - every model
-    counts once, however many cases or repetitions its run had."""
-    columns = list(GROUP_METRICS) + ["latency_mean", "tokens_mean"]
-    columns += [c for c in ("cost_per_rep_eur", "cost_per_pass_eur") if c in summary.columns]
-    grouped = summary.groupby(["group", "suite"], sort=False)
-    result = grouped[columns].mean()
-    result["models"] = grouped["model"].nunique()
-    return result.reset_index()
-
-
-# Radar axes, in drawing order; every score runs 0 (worst) to 1 (best).
+# Radar axes, in drawing order, with the label drawn for each (the figures
+# are in Italian); every score runs 0 (worst) to 1 (best). Each suite gets its
+# own radar: the two tasks differ too much to share one.
 RADAR_AXES = {
-    "markdown_accuracy": "markdown\naccuracy",
-    "sonar_clean_fix": "sonar\nclean fixes",
-    "consistency": "consistency",
-    "speed": "speed",
-    "low_cost": "low cost",
+    "accuracy": "accuratezza",
+    "consistency": "coerenza",
+    "speed": "velocità",
+    "low_cost": "economicità",
 }
+
+# What "accuracy" measures in each suite (its pass criterion).
+RADAR_ACCURACY_LABELS = {"markdown": "accuratezza\n(corrispondenza esatta)",
+                         "sonar": "accuratezza\n(correzione pulita)"}
 
 # Fixed log scales for the two unbounded measures: (value scoring 1, value
 # scoring 0). Fixed rather than relative to the models compared, so a model's
@@ -118,7 +116,7 @@ RADAR_AXES = {
 # gap isn't stretched to fill the axis the way a 1000x cost gap does.
 RADAR_LOG_SCALES = {
     "speed": (1.0, 60.0),        # mean latency per case, seconds
-    "low_cost": (1e-4, 10.0),    # EUR for one repetition of both suites
+    "low_cost": (1e-4, 10.0),    # EUR for one repetition of the suite
 }
 
 
@@ -146,34 +144,26 @@ def parse_radar_weights(values: list[str] | None) -> dict[str, float]:
 
 
 def radar_scores(summary: pd.DataFrame, weights: dict[str, float] | None = None) -> pd.DataFrame:
-    """One row per model: the raw measures behind each radar axis, the 0-1
-    score drawn for it, and the weighted overall score (equal weights by
-    default), most to least.
+    """One row per (model, suite): the raw measures behind each radar axis,
+    the 0-1 score drawn for it, and the weighted task score (equal weights by
+    default). There is no score across suites: averaging two very different
+    tasks hides how a model does at either.
 
-    Quality and consistency are absolute rates. Speed (mean latency per case
-    across both suites) and cost (one repetition of both suites, from
-    `cost_per_rep_eur`) use the fixed log scales in RADAR_LOG_SCALES."""
+    Accuracy and consistency are absolute rates. Speed (mean latency per case)
+    and cost (one repetition of the suite, from `cost_per_rep_eur`) use the
+    fixed log scales in RADAR_LOG_SCALES."""
     weights = weights or {axis: 1.0 for axis in RADAR_AXES}
-    rows = []
-    for (model, group), frame in summary.groupby(["model", "group"], sort=False):
-        by_suite = frame.set_index("suite")
-        rate = lambda suite: by_suite["pass_rate"].get(suite, math.nan)
-        costs = by_suite["cost_per_rep_eur"] if "cost_per_rep_eur" in by_suite else pd.Series(dtype=float)
-        rows.append({
-            "model": model,
-            "group": group,
-            "markdown_accuracy": rate("markdown"),
-            "sonar_clean_fix": rate("sonar"),
-            "consistency": by_suite["mean_agreement_rate"].mean(),
-            "latency_s": by_suite["latency_mean"].mean(),
-            # NaN unless every suite has a price: a partial sum would look cheap.
-            "cost_per_rep_eur": costs.sum() if len(costs) and costs.notna().all() else math.nan,
-        })
-    scores = pd.DataFrame(rows)
+    columns = ["model", "group", "suite", "accuracy", "consistency", "latency_s", "cost_per_rep_eur"]
+    scores = summary.assign(
+        accuracy=summary["pass_rate"],
+        consistency=summary["mean_agreement_rate"],
+        latency_s=summary["latency_mean"],
+        cost_per_rep_eur=summary["cost_per_rep_eur"] if "cost_per_rep_eur" in summary else math.nan,
+    )[columns].reset_index(drop=True)
     if scores.empty:
         return scores
     scores["speed"] = _log_score(scores["latency_s"], *RADAR_LOG_SCALES["speed"])
     scores["low_cost"] = _log_score(scores["cost_per_rep_eur"], *RADAR_LOG_SCALES["low_cost"])
     total = sum(weights.values())
-    scores["overall"] = sum(scores[axis] * weight for axis, weight in weights.items()) / total
-    return scores.sort_values("overall", ascending=False, na_position="last").reset_index(drop=True)
+    scores["score"] = sum(scores[axis] * weight for axis, weight in weights.items()) / total
+    return scores

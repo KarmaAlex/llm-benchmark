@@ -223,8 +223,10 @@ def test_single_run_plots_render(tmp_path):
     ref = ref_for(make_run(tmp_path, "2026-01-01_00-00-00"))
     written = plot_run(ref, tmp_path / "plots")
     names = {p.stem for p in written}
-    assert {"classification", "pass_matrix", "repetition_rate", "case_stability",
-            "sonar_funnel", "latency_tokens"} <= names
+    # (no cost_by_case: the fixture model has no price in the real configs)
+    per_suite = {"pass_matrix", "repetition_rate", "case_stability", "latency_tokens"}
+    assert {f"{name}_{suite}" for name in per_suite for suite in ("markdown", "sonar")} | {"sonar_funnel"} <= names
+    assert not names & {"classification", "markdown_difficulty", "pass_matrix", "cost_by_case"}
     assert all(p.stat().st_size > 0 for p in written)
 
 
@@ -239,10 +241,21 @@ def test_comparison_writes_figures_and_tables(tmp_path):
     out = tmp_path / "comparison"
     written = plot_comparison(frames, out) + write_tables(frames, selected, out)
 
-    assert {p.name for p in written} >= {
-        "pass_rate.png", "classification.png", "case_heatmap.png", "agreement.png",
-        "sonar_funnel.png", "efficiency.png", "group_summary.png", "cost.png",
-        "summary.csv", "group_summary.csv", "costs.csv", "cost_assumptions.json", "selected_runs.json",
+    names = {p.name for p in written}
+    assert not names & {"pass_rate.pdf", "efficiency.pdf", "group_summary.pdf", "group_summary.csv", "cost.pdf",
+                        "radar.pdf", "captions.md"}
+    # Dropped: agreement repeats classification, tokens says little.
+    assert not {n for n in names if n.startswith(("agreement_", "tokens_"))}
+    # No size figure: neither fixture model has a known parameter count.
+    assert not {n for n in names if n.startswith("size_")}
+    assert names >= {
+        "sonar_funnel.pdf",
+        "summary.csv", "costs.csv", "radar_scores.csv", "cost_assumptions.json", "selected_runs.json",
+    } | {
+        f"{name}_{suite}.pdf"
+        for name in ("pass_rate", "classification", "case_heatmap", "efficiency", "cost", "latency", "radar",
+                     "scorecard")
+        for suite in ("markdown", "sonar")
     }
     assumptions = json.loads((out / "cost_assumptions.json").read_text())
     assert assumptions["eur_per_kwh"] == cost.ELECTRICITY_EUR_PER_KWH
@@ -323,9 +336,10 @@ def test_cost_axis_ticks_and_scale():
     from analysis.plots import _cost_scale, _euro_tick
 
     # Float noise from the tick locator must not reach the label.
-    assert _euro_tick(6.000000000000001e-05) == "€0.00006"
-    assert _euro_tick(0.0) == "€0"
-    assert _euro_tick(0.12) == "€0.12"
+    # Italian style: decimal comma, euro after the amount.
+    assert _euro_tick(6.000000000000001e-05) == "0,00006 €"
+    assert _euro_tick(0.0) == "0 €"
+    assert _euro_tick(0.12) == "0,12 €"
     # Per attempt when that's readable, per 1,000 attempts below €0.10.
     assert _cost_scale(0.5) == 1
     assert _cost_scale(0.045) == 1_000
@@ -351,7 +365,7 @@ def test_measured_energy_replaces_the_power_assumption(tmp_path):
     assert set(markdown.loc["md002"]["cost_basis"]) == {cost.ELECTRICITY}
 
     note = cost.CostAssumptions().note(set(trials["cost_basis"]))
-    assert "local (measured)" in note and "local (assumed)" in note
+    assert "locale (misurato)" in note and "locale (stimato)" in note
 
 
 def with_hardware(path, gpus, slurm_job_id="42"):
@@ -386,8 +400,10 @@ def test_site_rate_override_and_multi_gpu_jobs(tmp_path):
     cost.add_cost_arguments(parser)
     assumptions = cost.assumptions_from_args(parser.parse_args(["--gpu-hour-price", "NVIDIA H200 NVL=2.00"]))
     assert assumptions.gpu_hour_overridden == ("NVIDIA H200 NVL",)
-    assert list(assumptions.gpu_hour_prices) == ["NVIDIA H200 NVL"]  # replaced, not duplicated
-    assert "site rate" in assumptions.note({cost.GPU_HOURS})
+    # Replaced, not duplicated; other GPUs keep their market rate.
+    assert [n for n in assumptions.gpu_hour_prices if n.lower() == "nvidia h200 nvl"] == ["NVIDIA H200 NVL"]
+    assert assumptions.gpu_hour_prices["NVIDIA H200 NVL"].eur == 2.00
+    assert "tariffa della struttura" in assumptions.note({cost.GPU_HOURS})
 
     path = with_hardware(make_run(tmp_path, "2026-01-01_00-00-00", model="Model-B"),
                          ["NVIDIA H200 NVL", "NVIDIA H200 NVL"])
@@ -481,27 +497,29 @@ def radar_summary():
         for suite, rate in (("markdown", md), ("sonar", sonar)):
             rows.append({"model": model, "group": group, "suite": suite, "pass_rate": rate,
                          "mean_agreement_rate": agreement, "latency_mean": latency,
-                         "cost_per_rep_eur": cost_rep / 2})
+                         "cost_per_rep_eur": cost_rep})
     return pd.DataFrame(rows)
 
 
-def test_radar_scores_use_fixed_log_scales_and_rank_by_overall():
-    scores = stats.radar_scores(radar_summary()).set_index("model")
-    fast, slow = scores.loc["Fast-Cheap"], scores.loc["Slow-Dear"]
+def test_radar_scores_are_per_suite_on_fixed_log_scales():
+    scores = stats.radar_scores(radar_summary()).set_index(["model", "suite"])
+    fast, slow = scores.loc[("Fast-Cheap", "sonar")], scores.loc[("Slow-Dear", "sonar")]
     # Anchors: 1 s / EUR 0.0001 score 1, 60 s / EUR 10 score 0.
     assert (fast["speed"], fast["low_cost"]) == (pytest.approx(1.0), pytest.approx(1.0))
     assert (slow["speed"], slow["low_cost"]) == (pytest.approx(0.0), pytest.approx(0.0))
-    assert fast["cost_per_rep_eur"] == pytest.approx(0.0001)   # both suites summed
-    assert slow["sonar_clean_fix"] == 0.9 and slow["consistency"] == 0.8
-    assert fast["overall"] == pytest.approx((0.6 + 0.2 + 1 + 1 + 1) / 5)
-    assert list(stats.radar_scores(radar_summary())["model"]) == ["Fast-Cheap", "Slow-Dear"]
+    assert slow["accuracy"] == 0.9 and slow["consistency"] == 0.8
+    assert scores.loc[("Slow-Dear", "markdown"), "accuracy"] == 1.0
+    # One task score per suite, no score across suites.
+    assert fast["score"] == pytest.approx((0.2 + 1 + 1 + 1) / 4)
+    assert scores.loc[("Fast-Cheap", "markdown"), "score"] == pytest.approx((0.6 + 1 + 1 + 1) / 4)
+    assert "overall" not in scores.columns
 
 
-def test_radar_weights_change_the_ranking():
-    weights = stats.parse_radar_weights(["sonar_clean_fix=10", "markdown_accuracy=10"])
-    ranked = stats.radar_scores(radar_summary(), weights)
-    assert list(ranked["model"]) == ["Slow-Dear", "Fast-Cheap"]
-    for bad in (["speed=-1"], ["nonsense=1"], ["speed=x"]):
+def test_radar_weights_change_the_task_score():
+    weights = stats.parse_radar_weights(["accuracy=10"])
+    scores = stats.radar_scores(radar_summary(), weights).set_index(["model", "suite"])
+    assert scores.loc[("Slow-Dear", "markdown"), "score"] > scores.loc[("Fast-Cheap", "markdown"), "score"]
+    for bad in (["speed=-1"], ["nonsense=1"], ["speed=x"], ["sonar_clean_fix=2"]):
         with pytest.raises(ValueError, match="--radar-weight"):
             stats.parse_radar_weights(bad)
 
@@ -509,18 +527,105 @@ def test_radar_weights_change_the_ranking():
 def test_radar_cost_is_missing_when_a_suite_is_unpriced():
     summary = radar_summary()
     summary.loc[(summary["model"] == "Slow-Dear") & (summary["suite"] == "sonar"), "cost_per_rep_eur"] = float("nan")
-    slow = stats.radar_scores(summary).set_index("model").loc["Slow-Dear"]
-    assert math.isnan(slow["cost_per_rep_eur"]) and math.isnan(slow["overall"])
+    scores = stats.radar_scores(summary).set_index(["model", "suite"])
+    assert math.isnan(scores.loc[("Slow-Dear", "sonar"), "score"])
+    assert not math.isnan(scores.loc[("Slow-Dear", "markdown"), "score"])
 
 
-def test_radar_figure_renders(tmp_path):
+def test_radar_and_scorecard_render_in_model_order(tmp_path):
     pytest.importorskip("seaborn")
     from analysis import plots
 
-    weights = stats.parse_radar_weights(["sonar_clean_fix=2"])
-    fig = plots.radar_comparison(stats.radar_scores(radar_summary(), weights), weights)
-    assert "weighted mean" in fig.texts[-1].get_text()
-    assert plots.save(fig, tmp_path, "radar").stat().st_size > 0
+    weights = stats.parse_radar_weights(["accuracy=2"])
+    scores = stats.radar_scores(radar_summary(), weights)
+    sonar = scores[scores["suite"] == "sonar"]
+    fig = plots.radar_comparison(sonar, weights)
+    # Commercial first, whatever the scores - the same order as every other figure.
+    titles = [ax.get_title(loc="center") for ax in fig.axes if ax.get_visible()]
+    assert titles[0].startswith("Slow-Dear") and "punteggio" in titles[0] and "#" not in titles[0]
+    assert "media pesata" in fig.texts[-1].get_text()
+    assert plots.save(fig, tmp_path, "radar_sonar").stat().st_size > 0
+
+    card = plots.scorecard(sonar, weights)
+    cells = {t.get_text() for t in card.axes[0].texts}
+    assert {"90%", "60,0 s", "(0,90)", "10 €"} <= cells
+    assert plots.save(card, tmp_path, "scorecard_sonar").stat().st_size > 0
+
+
+def test_pareto_frontier_keeps_only_unbeaten_points():
+    costs = [0.001, 0.002, 0.01, 0.05, 0.05, 1.0]
+    rates = [0.25, 0.20, 0.45, 0.90, 0.85, 0.92]
+    # 0.002 is beaten by the cheaper 0.25; of the two at 0.05 only the better counts.
+    assert stats.pareto_frontier(costs, rates) == [0, 2, 3, 5]
+    assert stats.pareto_frontier([], []) == []
+
+
+@pytest.mark.parametrize("value, text", [
+    (0.4841, "0,48 €"), (0.00059, "0,00059 €"), (4.9307, "4,93 €"), (1234.5, "1.234 €"), (0.0, "0 €"),
+    (math.nan, "n.d."),
+])
+def test_italian_euro_format(value, text):
+    from analysis import italian
+
+    assert italian.eur(value) == text
+
+
+def test_italian_numbers_percent_and_dates():
+    from analysis import italian
+
+    assert italian.number(4800, ",") == "4.800" and italian.number(2.3542, ".2f") == "2,35"
+    assert (italian.pct(0.92), italian.pct(0.995), italian.pct(1.0)) == ("92%", "99,5%", "100%")
+    assert italian.date("2026-09-28") == "28/09/2026" and italian.date("site") == "site"
+
+
+def test_model_sizes_use_the_longest_matching_family():
+    from analysis.model_sizes import model_size
+
+    assert model_size("Phi4-F16").params_b == 14.0
+    assert model_size("Phi4-mini-instruct-q8").params_b == 3.8
+    qwen3 = model_size("Qwen3-Coder-30B-Q8")
+    assert (qwen3.params_b, qwen3.effective_b) == (30.5, 3.3) and "MoE" in qwen3.note
+    gemma = model_size("gemma-4-e4b-q4-ud")
+    assert (gemma.params_b, gemma.effective_b) == (8.0, 4.5)
+    assert model_size("GPT-5") is None
+
+
+def test_size_figure_for_models_with_a_known_size(tmp_path):
+    pytest.importorskip("seaborn")
+    from analysis.compare_models import build_frames, plot_comparison
+
+    catalog = {**CATALOG, "Qwen3-Coder-30B-Q8": "llama.cpp"}
+    make_run(tmp_path, "2026-01-01_00-00-00", model="Model-A")
+    make_run(tmp_path, "2026-01-02_00-00-00", model="Qwen3-Coder-30B-Q8")
+    selected = agg.latest_full_runs(agg.all_run_refs(tmp_path, catalog=catalog))
+    frames = build_frames(selected, providers=catalog, model_ids=MODEL_IDS)
+    summary = frames["summary"].set_index(["model", "suite"])
+    assert summary.loc[("Qwen3-Coder-30B-Q8", "sonar"), ["params_b", "effective_params_b"]].tolist() == [30.5, 3.3]
+    assert math.isnan(summary.loc[("Model-A", "sonar"), "params_b"])
+    names = {p.stem for p in plot_comparison(frames, tmp_path / "out")}
+    assert {"size_markdown", "size_sonar"} <= names
+
+
+def test_captions_leave_titles_and_notes_out_of_the_images(tmp_path):
+    pytest.importorskip("seaborn")
+    from analysis import plots
+    from analysis.compare_models import build_frames, plot_comparison
+
+    make_run(tmp_path, "2026-01-01_00-00-00", model="Model-A")
+    selected = agg.latest_full_runs(agg.all_run_refs(tmp_path, catalog=CATALOG))
+    frames = build_frames(selected, providers=CATALOG, model_ids=MODEL_IDS)
+    try:
+        written = plot_comparison(frames, tmp_path / "out", captions=True)
+        fig = plots.cost_comparison(frames["costs"][frames["costs"]["suite"] == "sonar"], "API: list prices")
+        assert fig._suptitle is None and not fig.texts
+        assert plots.caption_text(fig).startswith("Correzioni Sonar: quanto costa un'esecuzione")
+    finally:
+        plots.configure(captions=False)
+    captions = (tmp_path / "out" / "captions.md").read_text()
+    assert tmp_path / "out" / "captions.md" in written
+    assert captions.startswith("# Didascalie delle figure")
+    assert "## efficiency_sonar.pdf\n\nCorrezioni Sonar: tasso di successo e costo" in captions
+    assert "prezzi di listino standard OpenAI al 28/09/2026" in captions
 
 
 def test_compare_models_reads_runs_from_a_results_subfolder(tmp_path, monkeypatch, capsys):
@@ -533,3 +638,73 @@ def test_compare_models_reads_runs_from_a_results_subfolder(tmp_path, monkeypatc
     monkeypatch.setattr("sys.argv", ["compare_models", "--results-dir", str(moved), "--list"])
     compare_models.main()
     assert "2026-01-01_00-00-00_Model-A" in capsys.readouterr().out
+
+
+def test_price_as_another_gpu_scales_time_by_memory_bandwidth(tmp_path):
+    parser = argparse.ArgumentParser()
+    cost.add_cost_arguments(parser)
+    assumptions = cost.assumptions_from_args(
+        parser.parse_args(["--price-as-gpu", "NVIDIA H200 NVL=NVIDIA A100 80GB SXM"]))
+    scale = 4800 / 2039
+
+    path = with_hardware(make_run(tmp_path, "2026-01-01_00-00-00", model="Model-B"), ["NVIDIA H200 NVL"])
+    trials = cost.trial_costs(ref_for(path), assumptions, CATALOG, MODEL_IDS)
+    row = trials[trials["suite"] == "markdown"].iloc[0]
+    a100 = assumptions.gpu_hour_prices["NVIDIA A100 80GB SXM"]
+    assert row["cost_basis"] == cost.GPU_HOURS
+    assert row["time_scale"] == pytest.approx(scale)
+    assert row["gpu_hours"] == pytest.approx(1.5 / 3600 * scale)
+    assert row["cost_eur"] == pytest.approx(1.5 / 3600 * scale * 1.00 / cost.USD_PER_EUR)
+    assert row["cost_eur_low"] == pytest.approx(1.5 / 3600 * scale * a100.low)
+    assert (row["measured_gpu"], row["priced_gpu"]) == ("NVIDIA H200 NVL", "NVIDIA A100 80GB SXM")
+
+    note = assumptions.note({cost.GPU_HOURS}, {"NVIDIA H200 NVL"})
+    assert "misurato su NVIDIA H200 NVL × 2,35" in note and "NVIDIA A100 80GB SXM 0,88 €/GPU-h" in note
+    assert "07/10/2026" in note and "4.800 → 2.039 GB/s" in note
+
+    # Without the option the H200 keeps its own rate and nothing is scaled.
+    plain = cost.trial_costs(ref_for(path), cost.CostAssumptions(), CATALOG, MODEL_IDS)
+    assert (plain["time_scale"] == 1.0).all() and set(plain["priced_gpu"]) == {"NVIDIA H200 NVL"}
+
+
+@pytest.mark.parametrize("value, message", [
+    ("NVIDIA H200 NVL", "expected"),
+    ("NVIDIA H200 NVL=NVIDIA L4", "no memory bandwidth"),
+])
+def test_bad_price_as_gpu_is_rejected(value, message):
+    with pytest.raises(ValueError, match=message):
+        cost.parse_price_as_gpu([value])
+
+
+def test_cost_only_comparison_draws_just_the_priced_figures(tmp_path):
+    pytest.importorskip("seaborn")
+    from analysis.compare_models import build_frames, plot_comparison
+
+    make_run(tmp_path, "2026-01-01_00-00-00", model="Model-A")
+    selected = agg.latest_full_runs(agg.all_run_refs(tmp_path, catalog=CATALOG))
+    frames = build_frames(selected, providers=CATALOG, model_ids=MODEL_IDS)
+    names = {p.stem for p in plot_comparison(frames, tmp_path / "out", cost_only=True)}
+    assert names == {f"{n}_{s}" for n in ("efficiency", "cost", "latency", "radar", "scorecard")
+                     for s in ("markdown", "sonar")}
+
+
+def test_latency_is_estimated_with_the_same_scale_as_cost(tmp_path):
+    pytest.importorskip("seaborn")
+    from analysis.compare_models import build_frames, latency_note
+
+    with_hardware(make_run(tmp_path, "2026-01-01_00-00-00", model="Model-B"), ["NVIDIA H200 NVL"])
+    make_run(tmp_path, "2026-01-02_00-00-00", model="Model-A")
+    selected = agg.latest_full_runs(agg.all_run_refs(tmp_path, catalog=CATALOG))
+    assumptions = cost.CostAssumptions(price_as_gpu={"NVIDIA H200 NVL": "NVIDIA A100 80GB SXM"})
+    frames = build_frames(selected, assumptions, providers=CATALOG, model_ids=MODEL_IDS)
+    summary = frames["summary"].set_index(["model", "suite"])
+
+    scale = 4800 / 2039
+    cluster = summary.loc[("Model-B", "markdown")]
+    assert cluster["latency_measured"] == pytest.approx(1.5)
+    assert cluster["latency_mean"] == pytest.approx(1.5 * scale)
+    api = summary.loc[("Model-A", "markdown")]
+    assert api["latency_mean"] == api["latency_measured"]          # only rented-GPU runs are rescaled
+    radar = frames["radar"].set_index(["model", "suite"])
+    assert radar.loc[("Model-B", "markdown"), "latency_s"] == pytest.approx(1.5 * scale)
+    assert "× 2,35 (banda di memoria) per NVIDIA A100 80GB SXM" in latency_note(frames["costs"])
