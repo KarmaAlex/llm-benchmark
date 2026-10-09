@@ -247,20 +247,24 @@ The script also lists GGUF files under `models/` that no config points at, since
 
 ### Plotting reproducibility results
 
-Both scripts need the `analysis` extra (`pip install -e ".[analysis]"`) and take `--format {png,pdf,svg}` (default `png` at `--dpi 200`) and `--out DIR`.
+Both scripts need the `analysis` extra (`pip install -e ".[analysis]"`). They write PDF by default, with fonts embedded as TrueType rather than Type 3. `--format png` (at `--dpi`, 200 by default) and `--out DIR` change that.
+
+Each figure shows a single suite and is written as `<name>_markdown.pdf` and `<name>_sonar.pdf`, so it stays readable at page width. The exception is `sonar_funnel`, which is sonar-only.
+
+For a LaTeX document, add `--captions`: figure titles and footnotes (cost assumptions, scales) are left out of the images and written to `captions.md` in the output folder instead, one section per figure, to use as the captions.
 
 `python -m analysis.plot_reproducibility [<run_id>]` renders one reproducibility run (the newest by default) into `results/<run>/plots/`:
 
 | Figure | Shows |
 |---|---|
-| `classification` | share of cases identical / equivalent / outcome-stable / flaky / harness-error, per suite |
-| `pass_matrix` | cases × repetitions, pass / fail / harness error — a deterministic case is a solid row |
-| `repetition_rate` | each repetition's pass rate with the mean and a ±1 sd band |
-| `case_stability` | per case, the share of repetitions giving the most common output and how many distinct outputs there were |
+| `pass_matrix_<suite>` | cases × repetitions, pass / fail / harness error — a deterministic case is a solid row |
+| `repetition_rate_<suite>` | each repetition's pass rate with the mean and a ±1 sd band |
+| `case_stability_<suite>` | per case, the share of repetitions giving the most common output and how many distinct outputs there were |
+| `latency_tokens_<suite>` | per-case latency and completion-token spread across repetitions |
+| `cost_by_case_<suite>` | what one attempt at each case costs (see *Cost estimates* below) |
 | `sonar_funnel` | how many sonar trials reached each pipeline stage, and where each case's repetitions stopped |
-| `latency_tokens` | per-case latency and completion-token spread across repetitions |
-| `markdown_difficulty` | markdown pass rate by difficulty level |
-| `cost_by_case` | what one attempt at each case costs (see *Cost estimates* below), plus `costs.csv` with per-suite totals |
+
+It also writes `costs.csv` with per-suite totals. There's no per-run classification figure, since for a single suite it would be one bar; the comparison's `classification_<suite>` shows it for every model.
 
 Partial runs still plot whatever they contain; the script says what makes the run incomplete.
 
@@ -273,9 +277,33 @@ Partial runs still plot whatever they contain; the script says what makes the ru
 
 A model is a config name without its ` (markdown)` / ` (sonar)` suffix, so quantizations (`Gemma-4-E4B-Q4` vs `-Q4-UD`) count as separate models. Its group comes from the `provider` in its `configs/*.yaml`: `openai` is commercial, `llama.cpp` is open source. Use `--group NAME=commercial|open` for a model the configs don't cover.
 
-`--list` shows every reproducibility run, whether it's full (and why not), and which one each model contributes. `--models NAME ...` restricts the comparison, and `-v` explains skipped runs. The script warns when the selected runs differ in `edit_mode` or repetition count, or when one group has no models.
+`--list` shows every reproducibility run, whether it's full (and why not), and which one each model contributes. `--models NAME ...` restricts the comparison, and `-v` explains skipped runs. Runs are looked for directly under `results/`, and the comparison is written to `results/comparisons/<timestamp>/`. For runs kept in a subfolder, point at it with `--results-dir results/<folder>`. The script warns when the selected runs differ in `edit_mode` or repetition count, or when one group has no models.
 
-It writes `pass_rate` (pooled over every case × repetition trial, with a 95% Wilson interval), `classification`, `case_heatmap`, `agreement`, `sonar_funnel`, `efficiency` (pass rate against latency and completion tokens), `group_summary` (the mean of each group's models) and `cost` (one suite repetition and one passing trial, per model). It also writes the numbers behind the figures: `summary.csv` (per model × suite), `group_summary.csv`, `costs.csv`, `cost_assumptions.json` (every price and assumption used, with sources), and `selected_runs.json`, which records the run each model's numbers came from.
+It writes these per-suite figures. Models are in the same order in all of them: commercial first, then open source, alphabetically within each.
+- `pass_rate_<suite>`: pooled over every case × repetition trial, with a 95% Wilson interval.
+- `classification_<suite>` and `case_heatmap_<suite>`.
+- `efficiency_<suite>`: pass rate against the cost of one suite repetition, log scale. A dashed step line marks the Pareto frontier, the best pass rate available at or below each cost; a model off it is beaten by a cheaper one.
+- `latency_<suite>`: pass rate against mean latency per case, log scale. Latency is measured on each model's own hardware (OpenAI API, cluster GPU or laptop), so it compares deployments, not only models.
+- `size_<suite>`: pass rate against the parameter count reported on each open-source model's card, log scale. Models that compute with fewer parameters than they store are labelled with the effective/active count: Gemma-4-E4B (8B total, 4.5B effective) and Qwen3-Coder-30B-A3B (mixture of experts, 30.5B total, 3.3B active). Commercial models have no published size and are drawn as dashed lines at their pass rate. The counts and their sources are in `analysis/model_sizes.py`; a model not listed there is left out of this figure.
+- `cost_<suite>`: cost of one suite repetition and of one passing trial, per model.
+- `radar_<suite>` and `scorecard_<suite>` (see below).
+
+It also writes `sonar_funnel`. It also writes the numbers behind the figures: `summary.csv` (per model × suite), `costs.csv`, `radar_scores.csv`, `cost_assumptions.json` (every price and assumption used, with sources), and `selected_runs.json`, which records the run each model's numbers came from.
+
+The `radar_<suite>` figures help choose a model for one task. The two tasks differ too much to share a radar, so each suite gets its own, with one radar per model and four axes where outer is always better:
+
+| Axis | Measure | Scale |
+|---|---|---|
+| Accuracy | pass rate (markdown: exact match; sonar: clean fix) | absolute |
+| Consistency | per case, the share of repetitions with its most common pass/fail outcome, averaged over the cases | absolute |
+| Speed | mean latency per case | fixed log scale: 1 s → 1, 60 s → 0 |
+| Low cost | one repetition of the suite | fixed log scale: €0.0001 → 1, €10 → 0 |
+
+Consistency counts the outcome, not the output text. A case that fails every time is fully consistent, and so is one that passes every time with differently worded answers. Whether the outputs themselves are identical is shown in `classification_<suite>` instead.
+
+The scales are fixed so that a model's values don't depend on which other models are compared. Each panel draws the other models in grey, and panels keep the usual model order. There is deliberately no combined score or ranking. The axes are for comparing models: which one is "best" depends on how a use case weighs quality against speed and cost.
+
+`scorecard_<suite>` shows the same numbers as a table, which is easier to read exact values from: one row per model, one column per axis. Each cell gives the measured value with its normalized 0–1 value (its position on the radar) in brackets, shaded by that value.
 
 ### Cost estimates
 
@@ -285,6 +313,13 @@ Both plotting scripts put a price in euros on each run. The rates are dated cons
 - **Local models** (`provider: llama.cpp`) are costed on electricity alone, at €0.3163/kWh. That price is ARERA's Q3 2026 reference for the typical household customer, taxes included. Hardware depreciation is not counted. Where a run recorded `energy_wh` (see *Metrics extracted per run*), that measured energy is used (basis `electricity-measured`). Because it covers only the GPU board and the CPU package, it's a lower bound. Runs without measurements fall back to inference time × an assumed wall-power draw (basis `electricity`): 90 W by default (an RTX 4050 Laptop GPU near its 60 W limit, plus CPU and platform), shown with a 60–120 W band. Each trial uses whichever basis it has, and every figure's footnote names the bases it used.
 
 - **Rented GPUs** (a llama.cpp run whose `settings.hardware.gpus` are all in `GPU_HOUR_PRICES_USD`) are costed in GPU-hours: inference time × the job's GPUs × the hourly rate. That's how a shared cluster GPU is paid for, and unlike a power reading it isn't affected by other jobs on the node. The default for the NVIDIA H200 NVL is the on-demand market rate of $3.79/GPU-hour (RunPod 1×), with a band of $3.52 (Vast.ai, the cheapest NVL listing) to $4.50 (the median across H200 providers), as of 2026-09-28. If your cluster has an internal rate, use it instead: `--gpu-hour-price "NVIDIA H200 NVL=<EUR>"`. A SLURM run on a GPU with no price (another GPU type on a mixed node) is reported as unpriced, never costed at household electricity prices, until `--gpu-hour-price` covers it. The GPU's exact name is in the run's `settings.hardware.gpus`. `costs.csv` also reports `gpu_hours` (model time) and `allocated_gpu_hours` (each repetition's wall-clock time × GPUs). For a repetition generated with `--no-sonar` and validated elsewhere later, `allocated_gpu_hours` counts only the generation time: `validate_sonar_run` stores it as `generation_wall_time` the first time it runs, so later validation on another machine isn't billed to the GPU.
+
+  To estimate what the cluster runs would have cost on another GPU, use `--price-as-gpu "MEASURED=TARGET"`, e.g. `--price-as-gpu "NVIDIA H200 NVL=NVIDIA A100 80GB SXM"`. The measured inference time is scaled by the ratio of the two GPUs' memory bandwidths (4,800 / 2,039 GB/s = 2.35×), on the assumption that single-stream decoding is bandwidth-bound, and charged at the target GPU's rate. The A100 80GB SXM rate is $1.00/GPU-hour (RunPod 1×), with a band of $0.37–$1.81, as of 2026-10-07. The cost footnotes state the substitution. Under `--price-as-gpu`, latency is scaled by the same factor, so the latency figures and the radars' speed axis describe the same hypothetical deployment as the costs. `summary.csv` keeps the measured value in `latency_measured`. Add `--cost-only` to either plotting script to draw only the figures that depend on pricing or GPU assumptions (efficiency, cost, latency, radar and scorecard; `cost_by_case` per run) into a separate `--out` folder, so they can sit next to the originals:
+
+  ```bash
+  python -m analysis.compare_models --cost-only --price-as-gpu "NVIDIA H200 NVL=NVIDIA A100 80GB SXM" --models ... --out results/comparisons/<name>_a100-estimate
+  python -m analysis.plot_reproducibility <run> --cost-only --price-as-gpu "NVIDIA H200 NVL=NVIDIA A100 80GB SXM" --out results/<run>/plots/a100-estimate
+  ```
 
 Only the model call is costed. Compile, test and SonarQube time is harness overhead that every model pays alike. Override any assumption for a run with `--local-watts`, `--local-watts-range LOW HIGH`, `--kwh-price` and `--usd-per-eur`. A model with no known price is reported as unpriced, never as free. To price a new API model, add it to `OPENAI_PRICES_USD_PER_1M`.
 
