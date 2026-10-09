@@ -230,6 +230,13 @@ def test_single_run_plots_render(tmp_path):
     assert all(p.stat().st_size > 0 for p in written)
 
 
+def test_run_title_drops_the_model_name_from_the_run_id(tmp_path):
+    from analysis.plot_reproducibility import run_label
+
+    assert run_label(ref_for(make_run(tmp_path, "2026-09-28_15-58-11_Model-A"))) == "2026-09-28_15-58-11"
+    assert run_label(ref_for(make_run(tmp_path, "lenient-parsing"))) == "lenient-parsing"
+
+
 def test_comparison_writes_figures_and_tables(tmp_path):
     pytest.importorskip("seaborn")
     from analysis.compare_models import build_frames, plot_comparison, write_tables
@@ -490,13 +497,13 @@ def radar_summary():
     import pandas as pd
 
     rows = []
-    for model, group, md, sonar, agreement, latency, cost_rep in [
+    for model, group, md, sonar, outcome, latency, cost_rep in [
         ("Fast-Cheap", "Open source", 0.6, 0.2, 1.0, 1.0, 0.0001),
         ("Slow-Dear", "Commercial", 1.0, 0.9, 0.8, 60.0, 10.0),
     ]:
         for suite, rate in (("markdown", md), ("sonar", sonar)):
             rows.append({"model": model, "group": group, "suite": suite, "pass_rate": rate,
-                         "mean_agreement_rate": agreement, "latency_mean": latency,
+                         "mean_agreement_rate": 0.5, "mean_outcome_agreement": outcome, "latency_mean": latency,
                          "cost_per_rep_eur": cost_rep})
     return pd.DataFrame(rows)
 
@@ -507,48 +514,48 @@ def test_radar_scores_are_per_suite_on_fixed_log_scales():
     # Anchors: 1 s / EUR 0.0001 score 1, 60 s / EUR 10 score 0.
     assert (fast["speed"], fast["low_cost"]) == (pytest.approx(1.0), pytest.approx(1.0))
     assert (slow["speed"], slow["low_cost"]) == (pytest.approx(0.0), pytest.approx(0.0))
-    assert slow["accuracy"] == 0.9 and slow["consistency"] == 0.8
-    assert scores.loc[("Slow-Dear", "markdown"), "accuracy"] == 1.0
-    # One task score per suite, no score across suites.
-    assert fast["score"] == pytest.approx((0.2 + 1 + 1 + 1) / 4)
-    assert scores.loc[("Fast-Cheap", "markdown"), "score"] == pytest.approx((0.6 + 1 + 1 + 1) / 4)
-    assert "overall" not in scores.columns
+    assert slow["accuracy"] == 0.9 and scores.loc[("Slow-Dear", "markdown"), "accuracy"] == 1.0
+    # Consistency is the pass/fail outcome agreement, not identical output text.
+    assert slow["consistency"] == 0.8
+    # No combined score: the axes compare models, they don't rank them.
+    assert not {"score", "overall"} & set(scores.columns)
 
 
-def test_radar_weights_change_the_task_score():
-    weights = stats.parse_radar_weights(["accuracy=10"])
-    scores = stats.radar_scores(radar_summary(), weights).set_index(["model", "suite"])
-    assert scores.loc[("Slow-Dear", "markdown"), "score"] > scores.loc[("Fast-Cheap", "markdown"), "score"]
-    for bad in (["speed=-1"], ["nonsense=1"], ["speed=x"], ["sonar_clean_fix=2"]):
-        with pytest.raises(ValueError, match="--radar-weight"):
-            stats.parse_radar_weights(bad)
+def test_consistency_counts_the_same_outcome_not_the_same_output(tmp_path):
+    # md002 passes in rep 1 and fails in rep 2, with a different output each
+    # time; md001 passes both times with the same output.
+    frames_cases = agg.case_frame(ref_for(make_run(tmp_path, "2026-01-01_00-00-00")))
+    scores = stats.reproducibility_scores(frames_cases).set_index("suite")
+    assert scores.loc["markdown", "mean_outcome_agreement"] == pytest.approx((1.0 + 0.5) / 2)
+    # S2000 fails every time, so sonar is fully consistent although it never passes.
+    assert scores.loc["sonar", "mean_outcome_agreement"] == pytest.approx(1.0)
 
 
 def test_radar_cost_is_missing_when_a_suite_is_unpriced():
     summary = radar_summary()
     summary.loc[(summary["model"] == "Slow-Dear") & (summary["suite"] == "sonar"), "cost_per_rep_eur"] = float("nan")
     scores = stats.radar_scores(summary).set_index(["model", "suite"])
-    assert math.isnan(scores.loc[("Slow-Dear", "sonar"), "score"])
-    assert not math.isnan(scores.loc[("Slow-Dear", "markdown"), "score"])
+    assert math.isnan(scores.loc[("Slow-Dear", "sonar"), "low_cost"])
+    assert not math.isnan(scores.loc[("Slow-Dear", "markdown"), "low_cost"])
 
 
 def test_radar_and_scorecard_render_in_model_order(tmp_path):
     pytest.importorskip("seaborn")
     from analysis import plots
 
-    weights = stats.parse_radar_weights(["accuracy=2"])
-    scores = stats.radar_scores(radar_summary(), weights)
+    scores = stats.radar_scores(radar_summary())
     sonar = scores[scores["suite"] == "sonar"]
-    fig = plots.radar_comparison(sonar, weights)
-    # Commercial first, whatever the scores - the same order as every other figure.
+    fig = plots.radar_comparison(sonar)
+    # Commercial first - the same order as every other figure - and no score.
     titles = [ax.get_title(loc="center") for ax in fig.axes if ax.get_visible()]
-    assert titles[0].startswith("Slow-Dear") and "punteggio" in titles[0] and "#" not in titles[0]
-    assert "media pesata" in fig.texts[-1].get_text()
+    assert titles[0].startswith("Slow-Dear") and "punteggio" not in titles[0] and "#" not in titles[0]
+    assert "non a stilarne una classifica" in fig.texts[-1].get_text()
     assert plots.save(fig, tmp_path, "radar_sonar").stat().st_size > 0
 
-    card = plots.scorecard(sonar, weights)
+    card = plots.scorecard(sonar)
     cells = {t.get_text() for t in card.axes[0].texts}
-    assert {"90%", "60,0 s", "(0,90)", "10 €"} <= cells
+    assert {"90%", "80%", "60,0 s", "(0,90)", "10 €"} <= cells
+    assert [t.get_text() for t in card.axes[0].get_xticklabels()][-1] == "economicità"
     assert plots.save(card, tmp_path, "scorecard_sonar").stat().st_size > 0
 
 

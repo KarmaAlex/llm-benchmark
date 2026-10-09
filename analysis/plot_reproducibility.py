@@ -90,9 +90,10 @@ def plot_run(ref: agg.RunRef, out_dir: Path, fmt: str = "pdf", dpi: int = 200,
     reps = agg.rep_frame(ref)
     suites = agg.suite_frame(ref)
     rates = agg.repetition_rates(ref)
-    # Model and run on separate lines: run ids end in the model name, so one
-    # line of both can be wider than a one-suite figure.
-    title = f"{ref.model} ({plots.GROUP_LABELS.get(ref.group, ref.group).lower()})\nesecuzione {ref.run_id}"
+    # Model and run on separate lines. The model is already named, so the
+    # run id drops its "_<model>" suffix and is left as the run's timestamp.
+    title = (f"{ref.model} ({plots.GROUP_LABELS.get(ref.group, ref.group).lower()})\n"
+             f"esecuzione {run_label(ref)}")
 
     assumptions = assumptions or cost.CostAssumptions()
     trials = cost.trial_costs(ref, assumptions)
@@ -136,6 +137,14 @@ def plot_run(ref: agg.RunRef, out_dir: Path, fmt: str = "pdf", dpi: int = 200,
         written.append(plots.save_captions(figures, out_dir, fmt))
 
     return [plots.save(fig, out_dir, name, fmt, dpi) for name, fig in figures.items()] + written
+
+
+def run_label(ref: agg.RunRef) -> str:
+    """The run id without the model name it ends in: 2026-09-28_15-58-11_GPT-5
+    -> 2026-09-28_15-58-11. Ids that don't end in it are kept whole."""
+    suffix = f"_{ref.model}"
+    run_id = ref.run_id
+    return run_id[:-len(suffix)] if run_id.lower().endswith(suffix.lower()) and len(run_id) > len(suffix) else run_id
 
 
 def figure_title(what: str, suite_label: str, title: str) -> str:

@@ -21,9 +21,10 @@ a document:
     latency_<suite>         pass rate vs mean latency per case
     size_<suite>            pass rate vs reported parameter count (open source)
     cost_<suite>            cost of one suite repetition and of one passing trial
-    radar_<suite>           one radar per model - accuracy, consistency, speed,
-                            low cost - with a task score
-    scorecard_<suite>       the radar's values and scores as a table
+    radar_<suite>           one radar per model - accuracy, consistency (same
+                            pass/fail outcome), speed, low cost - for comparing
+                            models, with no combined score
+    scorecard_<suite>       the radar's values as a table
     sonar_funnel            share of sonar trials reaching each pipeline stage
     captions.md             with --captions: each figure's title and footnote,
                             left out of the images, for LaTeX captions
@@ -66,7 +67,8 @@ SUMMARY_COLUMNS = [
     "pass_rate", "pass_rate_ci_low", "pass_rate_ci_high", "rep_pass_rate_mean", "rep_pass_rate_stdev",
     "pass_all", "pass_any", "pass_none",
     "share_identical", "share_equivalent", "share_outcome-stable", "share_flaky", "share_harness-error",
-    "share_stable_output", "mean_agreement_rate", "mean_distinct_outputs", "latency_mean", "latency_measured",
+    "share_stable_output", "mean_agreement_rate", "mean_outcome_agreement", "mean_distinct_outputs",
+    "latency_mean", "latency_measured",
     "tokens_mean", "params_b", "effective_params_b", "cost_basis", "cost_per_rep_eur", "cost_per_pass_eur", "priced_gpu", "time_scale",
 ]
 
@@ -95,11 +97,6 @@ def parse_args() -> argparse.Namespace:
                              "instead, to use as LaTeX captions.")
     parser.add_argument("--list", action="store_true", help="List reproducibility runs and the selection, then exit.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Explain why runs were skipped.")
-    parser.add_argument(
-        "--radar-weight", action="append", metavar="AXIS=W",
-        help="Weight of a radar axis in the task score (default: all 1). Axes: "
-             + ", ".join(stats.RADAR_AXES) + ". Repeatable, e.g. --radar-weight accuracy=2.",
-    )
     parser.add_argument("--cost-only", action="store_true",
                         help="Draw only the figures that depend on pricing or GPU assumptions (efficiency, "
                              "cost, latency, radar, scorecard), e.g. to compare assumptions in a separate --out "
@@ -128,8 +125,8 @@ def print_listing(refs: list[agg.RunRef], selected: list[agg.RunRef], results_di
 
 
 def build_frames(selected: list[agg.RunRef], assumptions: cost.CostAssumptions | None = None,
-                 providers: dict[str, str] | None = None, model_ids: dict[str, str] | None = None,
-                 radar_weights: dict[str, float] | None = None) -> dict[str, pd.DataFrame]:
+                 providers: dict[str, str] | None = None,
+                 model_ids: dict[str, str] | None = None) -> dict[str, pd.DataFrame]:
     assumptions = assumptions or cost.CostAssumptions()
     cases = pd.concat([agg.case_frame(ref) for ref in selected], ignore_index=True)
     suites = pd.concat([agg.suite_frame(ref) for ref in selected], ignore_index=True)
@@ -160,7 +157,7 @@ def build_frames(selected: list[agg.RunRef], assumptions: cost.CostAssumptions |
         "stages": stages,
         "funnel": stats.funnel_rates(stages),
         "costs": costs,
-        "radar": stats.radar_scores(summary, radar_weights),
+        "radar": stats.radar_scores(summary),
     }
 
 
@@ -190,7 +187,7 @@ SIZE_NOTE = ("Parametri: il totale dichiarato nella scheda di ciascun modello (B
 
 def plot_comparison(frames: dict[str, pd.DataFrame], out_dir: Path, fmt: str = "pdf", dpi: int = 200,
                     assumptions: cost.CostAssumptions | None = None,
-                    radar_weights: dict[str, float] | None = None, cost_only: bool = False,
+                    cost_only: bool = False,
                     captions: bool = False) -> list[Path]:
     """Draw the comparison figures; with `cost_only`, just the ones that
     depend on pricing or GPU assumptions (efficiency, cost, latency, radar,
@@ -240,8 +237,8 @@ def plot_comparison(frames: dict[str, pd.DataFrame], out_dir: Path, fmt: str = "
     for suite in ("markdown", "sonar"):
         suite_scores = only(radar, suite) if not radar.empty else radar
         if not suite_scores.empty:
-            figures[f"radar_{suite}"] = plots.radar_comparison(suite_scores, radar_weights, speed_note)
-            figures[f"scorecard_{suite}"] = plots.scorecard(suite_scores, radar_weights, speed_note)
+            figures[f"radar_{suite}"] = plots.radar_comparison(suite_scores, speed_note)
+            figures[f"scorecard_{suite}"] = plots.scorecard(suite_scores, speed_note)
     written = []
     if captions:
         written.append(plots.save_captions(figures, out_dir, fmt))
@@ -298,7 +295,6 @@ def main() -> None:
     args = parse_args()
     try:
         overrides = agg.parse_group_overrides(args.group)
-        radar_weights = stats.parse_radar_weights(args.radar_weight)
     except ValueError as e:
         raise SystemExit(str(e))
 
@@ -333,7 +329,7 @@ def main() -> None:
 
     out_dir = args.out or results_dir / "comparisons" / datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
     assumptions = cost.assumptions_from_args(args)
-    frames = build_frames(selected, assumptions, radar_weights=radar_weights)
+    frames = build_frames(selected, assumptions)
     unpriced = sorted(set(frames["costs"].loc[frames["costs"]["cost_basis"].str.contains(cost.UNPRICED), "model"]))
     if unpriced:
         print(f"warning: no price known for {', '.join(unpriced)} - an API model needs adding to "
@@ -341,7 +337,7 @@ def main() -> None:
               "(the name is in the run's settings.hardware.gpus)", file=sys.stderr)
     print_costs(frames["costs"])
 
-    written = plot_comparison(frames, out_dir, args.format, args.dpi, assumptions, radar_weights, args.cost_only,
+    written = plot_comparison(frames, out_dir, args.format, args.dpi, assumptions, args.cost_only,
                               args.captions)
     written += write_tables(frames, selected, out_dir, assumptions)
     for path in written:

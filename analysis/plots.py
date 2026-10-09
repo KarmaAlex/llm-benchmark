@@ -181,7 +181,7 @@ def _caption_parts(fig: plt.Figure) -> dict:
 def _suptitle(fig: plt.Figure, title: str) -> None:
     """The figure title - recorded for the caption, drawn unless captions
     are on."""
-    _caption_parts(fig)["title"] = title.replace("\n", " ")
+    _caption_parts(fig)["title"] = title.replace("\n", "  ·  ")
     if not _CAPTIONS:
         fig.suptitle(title, x=0.01, ha="left", fontweight="bold", color=INK)
 
@@ -898,31 +898,29 @@ def cost_comparison(costs: pd.DataFrame, note: str) -> plt.Figure:
 # --------------------------------------------------------------------------- #
 
 
-def radar_note(suite: str, weights: dict[str, float] | None = None, *, scorecard: bool = False) -> str:
-    """What the radar and scorecard axes measure, their scales and how the
-    task score is formed - the same text for both, so they read as a pair."""
+def radar_note(suite: str, *, scorecard: bool = False) -> str:
+    """What the radar and scorecard axes measure and their scales - the same
+    text for both, so they read as a pair."""
     from analysis.statistics import RADAR_LOG_SCALES
 
     (fast, slow), (cheap, dear) = RADAR_LOG_SCALES["speed"], RADAR_LOG_SCALES["low_cost"]
-    if weights is None or len(set(weights.values())) == 1:
-        score = "Punteggio = media semplice dei quattro assi."
-    else:
-        score = "Punteggio = media pesata (" + ", ".join(
-            f"{RADAR_AXES[a]} {italian.number(w, 'g')}" for a, w in weights.items()) + ")."
     accuracy = {
         "markdown": "Accuratezza: quota di tutte le prove il cui JSON corrisponde esattamente al riferimento.",
         "sonar": "Accuratezza: quota di tutte le prove concluse con una correzione pulita (compilata, test "
                  "superati, problema risolto, nessun nuovo problema).",
     }.get(suite, "Accuratezza: quota di tutte le prove superate.")
-    lead = ("Ogni cella: il valore misurato e, tra parentesi, il suo punteggio 0-1 (quello del grafico radar); "
-            "colore = punteggio." if scorecard else "Più esterno = migliore.")
+    lead = ("Ogni cella: il valore misurato e, tra parentesi, il valore normalizzato 0-1 (la posizione sul "
+            "grafico radar); colore = valore normalizzato." if scorecard else "Più esterno = migliore.")
     return (
         f"{lead}  {accuracy}  "
-        "Coerenza: quota di ripetizioni che danno l'output più frequente di un caso, in media sui casi.  "
-        f"Velocità: latenza media per caso su scala logaritmica, da {italian.number(fast, 'g')} s (punteggio 1) "
-        f"a {italian.number(slow, 'g')} s (punteggio 0).  "
+        "Coerenza: per ogni caso, quota di ripetizioni con l'esito più frequente (superato o fallito), in media "
+        "sui casi; conta l'esito, non il testo della risposta.  "
+        f"Velocità: latenza media per caso su scala logaritmica, da {italian.number(fast, 'g')} s (1) "
+        f"a {italian.number(slow, 'g')} s (0).  "
         f"Economicità: costo di una ripetizione della suite su scala logaritmica, da {italian.number(cheap, 'g')} € "
-        f"(punteggio 1) a {italian.number(dear, 'g')} € (punteggio 0).  {score}  "
+        f"(1) a {italian.number(dear, 'g')} € (0).  "
+        "Gli assi servono a confrontare i modelli, non a stilarne una classifica: quale sia il migliore dipende "
+        "dal peso che il caso d'uso dà a qualità, velocità e costo.  "
         "I costi mescolano tariffe API, GPU a noleggio ed elettricità della GPU propria (vedi la figura dei "
         "costi); la latenza mescola API, H200 e hardware del portatile."
     )
@@ -937,8 +935,7 @@ def _wrapped(text: str, fig: plt.Figure) -> str:
     return "\n".join(textwrap.wrap(text, width=int(fig.get_figwidth() * 14)))
 
 
-def radar_comparison(scores: pd.DataFrame, weights: dict[str, float] | None = None,
-                     extra_note: str | None = None) -> plt.Figure:
+def radar_comparison(scores: pd.DataFrame, extra_note: str | None = None) -> plt.Figure:
     """One radar per model for a single suite - accuracy, consistency, speed
     and cost on axes where outer is always better - in the usual model order,
     each drawn over every other model's outline in grey so a panel reads on
@@ -985,9 +982,7 @@ def radar_comparison(scores: pd.DataFrame, weights: dict[str, float] | None = No
         ax.spines["polar"].set_color(GRID)
         ax.set_theta_offset(np.pi / 2)  # first axis at the top
         ax.set_theta_direction(-1)
-        score = "n.d." if pd.isna(row["score"]) else italian.number(row["score"], ".2f")
-        ax.set_title(f"{row['model']}\n{_group_label(row['group'], lower=True)} · punteggio {score}", fontsize=9,
-                     loc="center", pad=22)
+        ax.set_title(f"{row['model']}\n{_group_label(row['group'], lower=True)}", fontsize=9, loc="center", pad=22)
     for ax in axes.flat[count:]:
         ax.set_visible(False)
 
@@ -995,7 +990,7 @@ def radar_comparison(scores: pd.DataFrame, weights: dict[str, float] | None = No
     present = [g for g in GROUPS if g in set(rows["group"])]
     handles = [Patch(facecolor=GROUP_COLORS[g], alpha=0.6, label=_group_label(g)) for g in present]
     handles.append(Line2D([], [], color=BASELINE, linewidth=1, label="altri modelli"))
-    text = radar_note(suite, weights) + (f"  {extra_note}" if extra_note else "")
+    text = radar_note(suite) + (f"  {extra_note}" if extra_note else "")
     # Polar tick labels sit outside the axes box tight_layout measures, so
     # rows need extra room to keep them clear of the next row's titles.
     _finish_with_legend(fig, handles, note=_wrapped(text, fig), h_pad=4.5)
@@ -1005,20 +1000,20 @@ def radar_comparison(scores: pd.DataFrame, weights: dict[str, float] | None = No
     return fig
 
 
-def scorecard(scores: pd.DataFrame, weights: dict[str, float] | None = None,
-              extra_note: str | None = None) -> plt.Figure:
-    """The radar's numbers as a table for a single suite: models x axes plus
-    the task score, each cell the measured value with its 0-1 score, shaded
-    by the score. Easier to read exact values from than a radar."""
+def scorecard(scores: pd.DataFrame, extra_note: str | None = None) -> plt.Figure:
+    """The radar's numbers as a table for a single suite: models x axes, each
+    cell the measured value with its normalized 0-1 value, shaded by it.
+    Easier to read exact values from than a radar. No combined column: the
+    axes compare models, they don't rank them."""
     suite = scores["suite"].iloc[0]
     order = model_order(scores)
     labels = model_labels(scores)
     frame = scores.set_index("model").reindex(order)
-    columns = [*RADAR_AXES, "score"]
+    columns = list(RADAR_AXES)
     # Wrapped to the column width: the Italian accuracy label is long.
     headers = {key: "\n".join(wrapped for line in label.split("\n")
                               for wrapped in textwrap.wrap(line, 13, break_long_words=False))
-               for key, label in {**_axis_labels(suite), "score": "punteggio"}.items()}
+               for key, label in _axis_labels(suite).items()}
     values = frame[columns].astype(float)
     values.index = [labels[m] for m in order]
 
@@ -1027,7 +1022,7 @@ def scorecard(scores: pd.DataFrame, weights: dict[str, float] | None = None,
         raw = {"accuracy": row["accuracy"], "consistency": row["consistency"],
                "speed": row["latency_s"], "low_cost": row["cost_per_rep_eur"]}.get(column)
         if raw is None or pd.isna(raw):
-            return "" if column == "score" else ("prezzo n.d." if column == "low_cost" else "n.d.")
+            return "prezzo n.d." if column == "low_cost" else "n.d."
         if column in ("accuracy", "consistency"):
             return _pct(raw)
         return f"{italian.number(raw, '.1f')} s" if column == "speed" else italian.eur(raw)
@@ -1035,18 +1030,13 @@ def scorecard(scores: pd.DataFrame, weights: dict[str, float] | None = None,
     # The footnote needs ~1.3 in whatever the number of rows.
     fig, ax = plt.subplots(figsize=(7.4, max(3.6, 1.6 + 0.55 * len(order))))
     sns.heatmap(values, ax=ax, cmap=SEQUENTIAL, vmin=0, vmax=1, linewidths=1.2, linecolor=SURFACE,
-                cbar_kws={"label": "punteggio (1 = migliore)", "shrink": 0.8, "pad": 0.03,
+                cbar_kws={"label": "valore normalizzato (1 = migliore)", "shrink": 0.8, "pad": 0.03,
                           "format": FuncFormatter(lambda v, _pos: italian.number(v, ".1f"))})
     for i, model in enumerate(order):
         for j, column in enumerate(columns):
             score = values.iat[i, j]
             ink = INK_MUTED if pd.isna(score) else _ink_for(SEQUENTIAL(score))
             text = measured(model, column)
-            if column == "score":
-                ax.text(j + 0.5, i + 0.5, "n.d." if pd.isna(score) else italian.number(score, ".2f"),
-                        ha="center", va="center",
-                        fontsize=9, fontweight="bold", color=ink)
-                continue
             ax.text(j + 0.5, i + 0.4, text, ha="center", va="center", fontsize=8.5, color=ink)
             if not pd.isna(score):
                 ax.text(j + 0.5, i + 0.72, f"({italian.number(score, '.2f')})", ha="center", va="center",
@@ -1059,6 +1049,6 @@ def scorecard(scores: pd.DataFrame, weights: dict[str, float] | None = None,
     ax.tick_params(axis="y", labelrotation=0)
     ax.grid(False)
     _suptitle(fig, f"{SUITE_LABELS.get(suite, suite)}: scheda di valutazione")
-    text = radar_note(suite, weights, scorecard=True) + (f"  {extra_note}" if extra_note else "")
+    text = radar_note(suite, scorecard=True) + (f"  {extra_note}" if extra_note else "")
     _finish_with_legend(fig, [], note=_wrapped(text, fig))
     return fig

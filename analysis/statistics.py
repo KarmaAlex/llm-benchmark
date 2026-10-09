@@ -46,6 +46,9 @@ def reproducibility_scores(cases: pd.DataFrame) -> pd.DataFrame:
             # Same answer every time, byte-for-byte or after normalisation.
             "share_stable_output": share["identical"] + share["equivalent"],
             "mean_agreement_rate": frame["agreement_rate"].mean(),
+            # Same pass/fail outcome every time, whatever the output text:
+            # per case, the share of repetitions with its most common outcome.
+            "mean_outcome_agreement": frame["pass_rate"].map(lambda p: max(p, 1 - p)).mean(),
             "mean_distinct_outputs": frame["distinct_effective_outputs"].mean(),
             "latency_mean": frame["latency_mean"].mean(),
             "tokens_mean": frame["tokens_mean"].mean(),
@@ -126,37 +129,22 @@ def _log_score(values: pd.Series, best: float, worst: float) -> pd.Series:
     return ((math.log(worst) - logs) / (math.log(worst) - math.log(best))).clip(0, 1)
 
 
-def parse_radar_weights(values: list[str] | None) -> dict[str, float]:
-    """`--radar-weight AXIS=W` arguments -> {axis: weight}; unnamed axes keep 1."""
-    weights = {axis: 1.0 for axis in RADAR_AXES}
-    for value in values or []:
-        axis, _, weight = value.partition("=")
-        try:
-            weights[axis.strip()] = float(weight)
-        except ValueError:
-            raise ValueError(f"Bad --radar-weight '{value}': expected AXIS=NUMBER") from None
-        if axis.strip() not in RADAR_AXES or weights[axis.strip()] < 0:
-            raise ValueError(f"Bad --radar-weight '{value}': axis must be one of {', '.join(RADAR_AXES)}, "
-                             "weight >= 0")
-    if not any(weights.values()):
-        raise ValueError("--radar-weight: at least one axis needs a positive weight")
-    return weights
+def radar_scores(summary: pd.DataFrame) -> pd.DataFrame:
+    """One row per (model, suite): the raw measures behind each radar axis and
+    the 0-1 score drawn for it. There is deliberately no combined score: which
+    model is best depends on how a use case weighs quality against speed and
+    cost, so the axes are for comparing models, not ranking them.
 
-
-def radar_scores(summary: pd.DataFrame, weights: dict[str, float] | None = None) -> pd.DataFrame:
-    """One row per (model, suite): the raw measures behind each radar axis,
-    the 0-1 score drawn for it, and the weighted task score (equal weights by
-    default). There is no score across suites: averaging two very different
-    tasks hides how a model does at either.
-
-    Accuracy and consistency are absolute rates. Speed (mean latency per case)
-    and cost (one repetition of the suite, from `cost_per_rep_eur`) use the
-    fixed log scales in RADAR_LOG_SCALES."""
-    weights = weights or {axis: 1.0 for axis in RADAR_AXES}
+    Accuracy is the pass rate. Consistency is how reliably a case gets the
+    same pass/fail outcome across repetitions (whatever the output text):
+    per case the share of repetitions with its most common outcome, averaged
+    over the cases. Speed (mean latency per case) and cost (one repetition of
+    the suite, from `cost_per_rep_eur`) use the fixed log scales in
+    RADAR_LOG_SCALES."""
     columns = ["model", "group", "suite", "accuracy", "consistency", "latency_s", "cost_per_rep_eur"]
     scores = summary.assign(
         accuracy=summary["pass_rate"],
-        consistency=summary["mean_agreement_rate"],
+        consistency=summary["mean_outcome_agreement"],
         latency_s=summary["latency_mean"],
         cost_per_rep_eur=summary["cost_per_rep_eur"] if "cost_per_rep_eur" in summary else math.nan,
     )[columns].reset_index(drop=True)
@@ -164,6 +152,4 @@ def radar_scores(summary: pd.DataFrame, weights: dict[str, float] | None = None)
         return scores
     scores["speed"] = _log_score(scores["latency_s"], *RADAR_LOG_SCALES["speed"])
     scores["low_cost"] = _log_score(scores["cost_per_rep_eur"], *RADAR_LOG_SCALES["low_cost"])
-    total = sum(weights.values())
-    scores["score"] = sum(scores[axis] * weight for axis, weight in weights.items()) / total
     return scores
